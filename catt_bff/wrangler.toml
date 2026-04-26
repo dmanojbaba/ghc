@@ -8,11 +8,13 @@ routes = [
 ]
 
 [observability]
-enabled = true
-head_sampling_rate = 1
 
 [observability.logs]
-invocation_logs = false
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
 
 [[durable_objects.bindings]]
 name = "DEVICE_QUEUE"
