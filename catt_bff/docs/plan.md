@@ -298,7 +298,7 @@ Accepts `GET ?text=...` or `POST` (JSON or form). Returns an HTML page with the 
 ## `wrangler.toml`
 
 ```toml
-name = "catt-bff"
+name = "ghc"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
