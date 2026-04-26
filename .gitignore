@@ -1,0 +1,10 @@
+_internal/
+
+# MacOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Claude Code
+.claude/

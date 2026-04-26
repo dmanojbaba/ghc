@@ -1,0 +1,31 @@
+name = "catt-bff"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+routes = [
+  { pattern = "ghc.manojbaba.com", custom_domain = true }
+]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+invocation_logs = false
+
+[[durable_objects.bindings]]
+name = "DEVICE_QUEUE"
+class_name = "DeviceQueue"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DeviceQueue"]
+
+[triggers]
+crons = ["3 3 * * *"]
+
+# Secrets (set via `wrangler secret put`):
+# CATT_SERVER_URL
+# YOUTUBE_API_KEY
+# TELEGRAM_SECRET_TOKEN

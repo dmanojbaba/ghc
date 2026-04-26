@@ -1,0 +1,4 @@
+catt
+flask>=3.0
+gtts
+gunicorn>=22.0

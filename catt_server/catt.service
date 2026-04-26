@@ -1,0 +1,22 @@
+[Unit]
+Description=catt
+Requires=docker.service network-online.target
+
+[Service]
+Restart=always
+
+WorkingDirectory=/home/pi/dotfiles/catt
+
+ExecStartPre=-/usr/bin/docker stop catt
+ExecStartPre=-/usr/bin/docker rm catt
+
+ExecStart=/usr/bin/docker run --rm \
+	--name catt \
+	--network host \
+	--volume /home/pi/dotfiles/catt/catt.cfg:/root/.config/catt/catt.cfg \
+	dmanojbaba/catt:latest
+
+ExecStop=/usr/bin/docker stop catt
+
+[Install]
+WantedBy=multi-user.target
