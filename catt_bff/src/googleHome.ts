@@ -101,31 +101,31 @@ async function handleExecute(
 
         if (command === "action.devices.commands.OnOff") {
           if (params.on) {
-            await doGet(stub, "/box/stop");
-            await doGet(stub, "/box/set/app/youtube");
-            await doGet(stub, "/box/set/device/" + DEFAULT_DEVICE);
+            await doGet(stub, "/stop");
+            await doGet(stub, "/set/app/youtube");
+            await doGet(stub, "/set/device/" + DEFAULT_DEVICE);
           } else {
-            await doGet(stub, "/box/stop");
-            await doGet(stub, "/box/set/app/" + DEFAULT_APP);
+            await doGet(stub, "/stop");
+            await doGet(stub, "/set/app/" + DEFAULT_APP);
           }
           result = { status: "SUCCESS", states: { on: params.on, online: true, playbackState: "STOPPED" } };
 
         } else if (command === "action.devices.commands.SetModes") {
           const appMode = (params.updateModeSettings as Record<string, string>)?.app_mode ?? DEFAULT_APP;
-          await doGet(stub, "/box/set/app/" + appMode);
+          await doGet(stub, "/set/app/" + appMode);
           result = { status: "SUCCESS", states: { online: true, currentModeSettings: { app_mode: appMode } } };
 
         } else if (command === "action.devices.commands.SetInput") {
           const newInput = String(params.newInput);
           const key      = getInputKey(DEVICE_ID, newInput, null) ?? newInput;
-          await doGet(stub, "/box/set/device/" + key);
+          await doGet(stub, "/set/device/" + key);
           result = { status: "SUCCESS", states: { online: true, currentInput: key } };
 
         } else if (command === "action.devices.commands.selectChannel") {
           const channelCode = String(
             params.channelCode ?? getChannelCode(DEVICE_ID, String(params.channelNumber)) ?? "",
           );
-          await doGet(stub, "/box/set/prev/" + channelCode);
+          await doGet(stub, "/set/prev/" + channelCode);
           await castCommand(env.CATT_SERVER_URL, cattDevice, "cast", channelCode, {
             force_default: doSt.app === DEFAULT_APP,
           });
@@ -139,19 +139,19 @@ async function handleExecute(
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaShuffle") {
-          await doGet(stub, "/box/shuffle");
+          await doGet(stub, "/shuffle");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.returnChannel") {
-          await doGet(stub, "/box/prev");
+          await doGet(stub, "/prev");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaPrevious") {
-          await doGet(stub, "/box/prev");
+          await doGet(stub, "/prev");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaNext") {
-          await doGet(stub, "/box/next");
+          await doGet(stub, "/next");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (
@@ -162,18 +162,18 @@ async function handleExecute(
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaStop") {
-          await doGet(stub, "/box/stop");
+          await doGet(stub, "/stop");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.appSelect") {
           const app = String(params.newApplication ?? DEFAULT_APP);
-          await doGet(stub, "/box/set/app/" + app);
+          await doGet(stub, "/set/app/" + app);
           result = { status: "SUCCESS", states: { online: true, currentApplication: app } };
 
         } else if (command === "action.devices.commands.setVolume") {
           const volume = Number(params.volumeLevel ?? 5);
           await castCommand(env.CATT_SERVER_URL, cattDevice, "volume", volume * 10);
-          await doGet(stub, "/box/set/volume/" + volume);
+          await doGet(stub, "/set/volume/" + volume);
           result = { status: "SUCCESS", states: { online: true, currentVolume: volume } };
 
         } else {
