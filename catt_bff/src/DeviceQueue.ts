@@ -219,8 +219,8 @@ export class DeviceQueue implements DurableObject {
 
   async fetch(request: Request): Promise<Response> {
     const url   = new URL(request.url);
-    const parts = url.pathname.split("/").filter(Boolean); // [device, action, ...rest]
-    const action = parts[1] ?? "";
+    const parts = url.pathname.split("/").filter(Boolean); // ["device", "box", action, ...rest]
+    const action = parts[2] ?? "";
 
     switch (action) {
       case "state":
@@ -251,7 +251,7 @@ export class DeviceQueue implements DurableObject {
         return new Response("ok");
 
       case "cast": {
-        const rawUrl  = decodeURIComponent(parts.slice(2).join("/"));
+        const rawUrl  = decodeURIComponent(parts.slice(3).join("/"));
         const method  = request.method.toUpperCase();
         if (method === "POST") {
           const body = await request.json() as { url: string; title?: string };
@@ -263,7 +263,7 @@ export class DeviceQueue implements DurableObject {
       }
 
       case "site": {
-        const rawArg = decodeURIComponent(parts.slice(2).join("/"));
+        const rawArg = decodeURIComponent(parts.slice(3).join("/"));
         const device = this.resolveDevice(this.get("device"));
         await castCommand(this.serverUrl, device, "stop");
         await this.state.storage.deleteAlarm();
@@ -289,8 +289,8 @@ export class DeviceQueue implements DurableObject {
       }
 
       case "set": {
-        const key   = parts[2];
-        const value = parts[3] ?? "";
+        const key   = parts[3];
+        const value = parts[4] ?? "";
         if (key) this.set(key, value);
         return new Response("ok");
       }

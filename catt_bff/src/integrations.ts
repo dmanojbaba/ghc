@@ -20,11 +20,11 @@ async function dispatchCommand(
   doStub: DurableObjectStub,
 ): Promise<string> {
   if (DO_COMMANDS.has(command)) {
-    await doStub.fetch(new Request(`https://do/box/${command}`));
+    await doStub.fetch(new Request(`https://do/device/box/${command}`));
     return command;
   }
   if (command === "tts") {
-    await doStub.fetch(new Request(`https://do/box/site/${encodeURIComponent(rawValue)}`));
+    await doStub.fetch(new Request(`https://do/device/box/site/${encodeURIComponent(rawValue)}`));
     return "tts";
   }
   if (command === "volume") {

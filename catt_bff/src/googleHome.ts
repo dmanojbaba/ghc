@@ -20,11 +20,11 @@ function getDoStub(env: Env, deviceId: string): DurableObjectStub {
 }
 
 async function doGet(stub: DurableObjectStub, path: string): Promise<void> {
-  await stub.fetch(`https://do${path}`);
+  await stub.fetch(`https://do/device/box${path}`);
 }
 
 async function doState(stub: DurableObjectStub): Promise<Record<string, unknown>> {
-  const res = await stub.fetch("https://do/box/state");
+  const res = await stub.fetch("https://do/device/box/state");
   return res.json() as Promise<Record<string, unknown>>;
 }
 
@@ -108,7 +108,7 @@ async function handleExecute(
             await doGet(stub, "/box/stop");
             await doGet(stub, "/box/set/app/" + DEFAULT_APP);
           }
-          result = { status: "SUCCESS", states: { on: params.on, online: true } };
+          result = { status: "SUCCESS", states: { on: params.on, online: true, playbackState: "STOPPED" } };
 
         } else if (command === "action.devices.commands.SetModes") {
           const appMode = (params.updateModeSettings as Record<string, string>)?.app_mode ?? DEFAULT_APP;

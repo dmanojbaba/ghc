@@ -100,6 +100,6 @@ export default {
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     const stub = getDoStub(env, DEVICE_ID);
-    await stub.fetch(new Request("https://do/box/stop"));
+    await stub.fetch(new Request("https://do/device/box/stop"));
   },
 };
