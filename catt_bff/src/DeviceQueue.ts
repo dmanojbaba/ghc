@@ -1,7 +1,7 @@
 import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems } from "./urlHelper";
 import {
-  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_NOW, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST,
+  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_NOW, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME,
   INPUT_TO_DEVICE,
 } from "./devices";
 
@@ -47,6 +47,7 @@ export class DeviceQueue implements DurableObject {
       tts:      DEFAULT_TTS,
       device:   DEFAULT_DEVICE,
       playlist: DEFAULT_PLAYLIST,
+      volume:   String(DEFAULT_VOLUME),
     };
     return defaults[key] ?? "";
   }
@@ -210,6 +211,7 @@ export class DeviceQueue implements DurableObject {
       prev:     this.get("prev"),
       tts:      this.get("tts"),
       playlist: this.get("playlist"),
+      volume:   Number(this.get("volume")) || DEFAULT_VOLUME,
       next:     rows[0]?.url ?? DEFAULT_NEXT,
       queue:    rows.slice(1).map((r) => r.url),
     };

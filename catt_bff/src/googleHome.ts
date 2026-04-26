@@ -1,7 +1,7 @@
-import { castCommand, getStatus } from "./catt";
+import { castCommand } from "./catt";
 import {
   DEVICES, DEVICE_ID, INPUT_TO_DEVICE,
-  DEFAULT_APP, DEFAULT_DEVICE,
+  DEFAULT_APP, DEFAULT_DEVICE, DEFAULT_VOLUME,
   getInputKey, getChannelCode,
 } from "./devices";
 
@@ -50,8 +50,6 @@ export async function handleQuery(
       const stub      = getDoStub(env, DEVICE_ID);
       const doSt      = await doState(stub);
       const inputKey  = String(doSt.device ?? DEFAULT_DEVICE);
-      const cattDevice = INPUT_TO_DEVICE[inputKey] ?? inputKey;
-      const statusRes = await getStatus(env.CATT_SERVER_URL, cattDevice);
 
       states[device.id] = {
         online:              true,
@@ -59,7 +57,7 @@ export async function handleQuery(
         currentApplication:  doSt.app,
         currentInput:        inputKey,
         currentModeSettings: { app_mode: doSt.app },
-        currentVolume:       statusRes.data?.volume_level ?? 10,
+        currentVolume:       Number(doSt.volume ?? DEFAULT_VOLUME),
         isMuted:             false,
         activityState:       "ACTIVE",
         playbackState:       doSt.now === "playing" ? "PLAYING" : "STOPPED",
@@ -175,6 +173,7 @@ async function handleExecute(
         } else if (command === "action.devices.commands.setVolume") {
           const volume = Number(params.volumeLevel ?? 5);
           await castCommand(env.CATT_SERVER_URL, cattDevice, "volume", volume * 10);
+          await doGet(stub, "/box/set/volume/" + volume);
           result = { status: "SUCCESS", states: { online: true, currentVolume: volume } };
 
         } else {

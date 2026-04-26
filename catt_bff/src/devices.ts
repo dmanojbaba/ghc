@@ -100,6 +100,7 @@ export const DEFAULT_NEXT     = "ping";
 export const DEFAULT_NOW      = "stopped";
 export const DEFAULT_TTS      = "Hello World!";
 export const DEFAULT_PLAYLIST = "";
+export const DEFAULT_VOLUME   = 50;
 
 export function getInputKey(deviceId: string, input: string, fallback: string | null): string | null {
   for (const d of DEVICES) {

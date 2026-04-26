@@ -44,6 +44,7 @@ export async function castCommand(
     body: JSON.stringify(body),
   });
 
+  if (!res.ok) throw new Error(`catt_server error: ${res.status}`);
   return res.json() as Promise<CattResponse>;
 }
 
@@ -54,6 +55,7 @@ export async function getStatus(serverUrl: string, device: string): Promise<Catt
     body: JSON.stringify({ device, command: "status" }),
   });
 
+  if (!res.ok) throw new Error(`catt_server error: ${res.status}`);
   return res.json() as Promise<CattStatusResponse>;
 }
 
@@ -64,5 +66,6 @@ export async function getInfo(serverUrl: string, device: string): Promise<CattIn
     body: JSON.stringify({ device, command: "info" }),
   });
 
+  if (!res.ok) throw new Error(`catt_server error: ${res.status}`);
   return res.json() as Promise<CattInfoResponse>;
 }
