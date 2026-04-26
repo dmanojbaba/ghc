@@ -1,5 +1,5 @@
 import { DeviceQueue } from "./DeviceQueue";
-import { handleFulfillment } from "./googleHome";
+import { handleFulfillment, handleSync, handleQuery } from "./googleHome";
 import { handleOAuthAuth, handleOAuthToken } from "./oauth";
 import { handleSlack, handleTelegram } from "./integrations";
 import { DEVICE_ID } from "./devices";
@@ -29,6 +29,16 @@ export default {
     // Google Home fulfillment
     if (path === "/fulfillment" && method === "POST") {
       return handleFulfillment(request, env);
+    }
+
+    // Debug: verify SYNC response without going through Google
+    if (path === "/gsync" && method === "GET") {
+      return Response.json(await handleSync("debug"));
+    }
+
+    // Debug: verify QUERY response without going through Google
+    if (path === "/gquery" && method === "GET") {
+      return Response.json(await handleQuery("debug", { devices: [{ id: DEVICE_ID }] }, env));
     }
 
     // OAuth

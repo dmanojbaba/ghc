@@ -30,8 +30,8 @@ export class DeviceQueue implements DurableObject {
   }
 
   private get(key: string): string {
-    const row = this.sql.exec<{ value: string }>("SELECT value FROM kv WHERE key = ?", key).one();
-    return row?.value ?? this.defaultFor(key);
+    const rows = this.sql.exec<{ value: string }>("SELECT value FROM kv WHERE key = ?", key).toArray();
+    return rows[0]?.value ?? this.defaultFor(key);
   }
 
   private set(key: string, value: string): void {

@@ -28,7 +28,7 @@ async function doState(stub: DurableObjectStub): Promise<Record<string, unknown>
   return res.json() as Promise<Record<string, unknown>>;
 }
 
-async function handleSync(requestId: string): Promise<Record<string, unknown>> {
+export async function handleSync(requestId: string): Promise<Record<string, unknown>> {
   return {
     requestId,
     payload: {
@@ -38,7 +38,7 @@ async function handleSync(requestId: string): Promise<Record<string, unknown>> {
   };
 }
 
-async function handleQuery(
+export async function handleQuery(
   requestId: string,
   payload: { devices: Array<{ id: string }> },
   env: Env,
