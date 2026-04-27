@@ -77,7 +77,7 @@ export class DeviceQueue implements DurableObject {
     }
   }
 
-  async advance(): Promise<void> {
+  async advance(userInitiated = false): Promise<void> {
     const row = this.sql
       .exec<{ position: number; url: string; title: string | null }>(
         "SELECT position, url, title FROM queue ORDER BY position ASC LIMIT 1",
@@ -85,12 +85,14 @@ export class DeviceQueue implements DurableObject {
       .toArray()[0];
 
     if (!row) {
-      // queue empty — play ping sentinel and mark stopped
-      const device = this.resolveDevice(this.get("device"));
-      await castCommand(this.serverUrl, device, "cast", getParsedUrl(DEFAULT_NEXT), {
-        force_default: this.forceDefault(),
-      });
+      if (userInitiated) {
+        const device = this.resolveDevice(this.get("device"));
+        await castCommand(this.serverUrl, device, "cast", getParsedUrl(DEFAULT_NEXT), {
+          force_default: this.forceDefault(),
+        });
+      }
       this.set("now", DEFAULT_NOW);
+      await this.state.storage.deleteAlarm();
       return;
     }
 
@@ -141,13 +143,23 @@ export class DeviceQueue implements DurableObject {
   }
 
   async playPrev(): Promise<void> {
-    const prev   = getParsedUrl(this.get("prev"));
-    const device = this.resolveDevice(this.get("device"));
-    await castCommand(this.serverUrl, device, "cast", prev, {
-      force_default: this.forceDefault(),
-    });
+    const rawPrev = this.get("prev");
+    const device  = this.resolveDevice(this.get("device"));
+
+    if (rawPrev === "tts") {
+      await castCommand(this.serverUrl, device, "tts", this.get("tts"));
+    } else {
+      await castCommand(this.serverUrl, device, "cast", getParsedUrl(rawPrev), {
+        force_default: this.forceDefault(),
+      });
+    }
+
     this.set("now", "playing");
-    await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
+    if (rawPrev !== DEFAULT_PREV && rawPrev !== "tts") {
+      await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
+    } else {
+      await this.state.storage.deleteAlarm();
+    }
   }
 
   async alarm(): Promise<void> {
@@ -227,7 +239,7 @@ export class DeviceQueue implements DurableObject {
         return new Response("ok");
 
       case "next":
-        await this.advance();
+        await this.advance(true);
         return new Response("ok");
 
       case "play": {
@@ -272,6 +284,7 @@ export class DeviceQueue implements DurableObject {
             const echoUrl = `https://${new URL(request.url).host}/echo`;
             await castCommand(this.serverUrl, device, "cast_site", echoUrl);
           } else {
+            this.set("prev", "tts");
             await castCommand(this.serverUrl, device, "tts", rawArg);
           }
         }
