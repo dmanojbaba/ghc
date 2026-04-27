@@ -164,7 +164,7 @@ STOPPED ──(enqueue when idle)──► PLAYING
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 10s (settle) |
 | `playPrev()` | Cast `prev` URL (URL-resolved via `getParsedUrl`), set `now=playing`, schedule alarm |
 | `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration → 10s poll; if `getInfo` fails → `getStatus` fallback |
-| `getState()` | Return current state dict (device, app, now, prev, tts, playlist, next, queue array) |
+| `getState()` | Return current state dict (alarm, now, device, app, volume, prev, next, playlist, tts, queue array) — `alarm` is ISO timestamp of next scheduled alarm or `null` |
 
 ### HTTP routes (handled inside DO `fetch`)
 
@@ -172,7 +172,7 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 
 | Method | Path | Action |
 |---|---|---|
-| `GET` | `/device/box/state` | Return `getState()` as JSON |
+| `GET` | `/device/box/state` | Return `getState()` as pretty-printed JSON including scheduled alarm timestamp |
 | `GET` | `/device/box/play` | `play_toggle` on catt_server |
 | `GET` | `/device/box/prev` | `playPrev()` |
 | `GET` | `/device/box/next` | `advance()` |
@@ -247,8 +247,8 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 | `OnOff` (off) | Call `/box/clear` (clears queue + alarm, no catt_server call), then set `app=default` |
 | `SetModes` | Update `app` state in DO |
 | `SetInput` | Update `device` state in DO |
-| `selectChannel` | Cast channel URL, update `prev` |
-| `relativeChannel` | -1 → pttv, +1 → sun |
+| `selectChannel` | Enqueue channel URL via DO (`/cast/:url`) — URL resolved via `getParsedUrl` |
+| `relativeChannel` | -1 → pttv, +1 → sun — enqueued via DO (`/cast/:url`), URL resolved via `getParsedUrl` |
 | `returnChannel` | `playPrev()` |
 | `mediaShuffle` | `shuffle()` using saved `playlist` state key |
 | `mediaPrevious` | `playPrev()` |

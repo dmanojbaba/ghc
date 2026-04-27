@@ -190,23 +190,26 @@ export class DeviceQueue implements DurableObject {
     await this.state.storage.setAlarm(Date.now() + POLL_INTERVAL_MS);
   }
 
-  getState(): Record<string, unknown> {
+  async getState(): Promise<Record<string, unknown>> {
     const rows = this.sql
       .exec<{ position: number; url: string; title: string | null }>(
         "SELECT position, url, title FROM queue ORDER BY position ASC",
       )
       .toArray();
 
+    const alarmTs = await this.state.storage.getAlarm();
+
     return {
-      device:   this.get("device"),
-      app:      this.get("app"),
-      now:      this.get("now"),
-      prev:     this.get("prev"),
-      tts:      this.get("tts"),
-      playlist: this.get("playlist"),
-      volume:   Number(this.get("volume")) || DEFAULT_VOLUME,
-      next:     rows[0]?.url ?? DEFAULT_NEXT,
-      queue:    rows.slice(1).map((r) => r.url),
+      alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
+      now:       this.get("now"),
+      device:    this.get("device"),
+      app:       this.get("app"),
+      volume:    Number(this.get("volume")) || DEFAULT_VOLUME,
+      prev:      this.get("prev"),
+      next:      rows[0]?.url ?? DEFAULT_NEXT,
+      playlist:  this.get("playlist"),
+      tts:       this.get("tts"),
+      queue:     rows.slice(1).map((r) => r.url),
     };
   }
 
@@ -217,7 +220,7 @@ export class DeviceQueue implements DurableObject {
 
     switch (action) {
       case "state":
-        return new Response(JSON.stringify(this.getState(), null, 2), { headers: { "content-type": "application/json" } });
+        return new Response(JSON.stringify(await this.getState(), null, 2), { headers: { "content-type": "application/json" } });
 
       case "prev":
         await this.playPrev();
