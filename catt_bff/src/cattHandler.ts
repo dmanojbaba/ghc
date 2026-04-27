@@ -1,11 +1,16 @@
+const DO_COMMANDS = new Set(["play", "stop", "prev", "next"]);
+
 export async function handleCatt(request: Request, _env: Env, doStub: DurableObjectStub): Promise<Response> {
   const body = await request.json() as { command?: string; value?: string; device?: string };
   if (!body.command) return new Response("'command' is required", { status: 400 });
 
-  const forwarded = new Request("https://do/device/box/catt", {
+  if (DO_COMMANDS.has(body.command)) {
+    return doStub.fetch(new Request(`https://do/device/box/${body.command}`));
+  }
+
+  return doStub.fetch(new Request("https://do/device/box/catt", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
-  });
-  return doStub.fetch(forwarded);
+  }));
 }

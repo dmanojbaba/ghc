@@ -89,7 +89,7 @@ wrangler deploy
 #### `POST /catt` — Ad-hoc commands
 
 ```json
-{"command": "cast|site", "device": "<key|name|queue>", "value": "..."}
+{"command": "cast|site|play|stop|prev|next", "device": "<key|name|queue>", "value": "..."}
 ```
 
 | `command` | `device` | `value` | Effect |
@@ -98,8 +98,12 @@ wrangler deploy
 | `cast` | `queue` | URL or redirect key | Enqueue; plays immediately if idle |
 | `site` | input key, name, or omit | URL | `cast_site` the URL |
 | `site` | input key, name, or omit | plain text | TTS: HTML on TV, spoken on audio device |
+| `play` | — | — | Toggle play/pause |
+| `stop` | — | — | Stop + clear queue |
+| `prev` | — | — | Play previous |
+| `next` | — | — | Advance queue; casts ping if empty |
 
-`device` accepts aliases (`k`, `o`, `otv`) or full names (`Mini Kitchen`, `Office TV`). Switching to a Mini device auto-resets `app` to `default`.
+`device` accepts aliases (`k`, `o`, `otv`) or full names (`Mini Kitchen`, `Office TV`). Switching to a Mini device auto-resets `app` to `default`. Ignored for `play`, `stop`, `prev`, `next`.
 
 ```bash
 # Cast immediately on Mini Office
@@ -121,6 +125,10 @@ curl -X POST https://<worker>/catt \
 curl -X POST https://<worker>/catt \
   -H 'Content-Type: application/json' \
   -d '{"command": "site", "device": "otv", "value": "https://example.com"}'
+
+# Playback controls
+curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -d '{"command": "play"}'
+curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -d '{"command": "next"}'
 ```
 
 #### `GET /device/box/*` — Queue controls

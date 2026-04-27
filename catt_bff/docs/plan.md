@@ -316,15 +316,15 @@ Single endpoint for ad-hoc curl usage.
 
 | Method | Path | Behaviour |
 |---|---|---|
-| `POST` | `/catt` | Dispatch `cast`, `site`, or `queue` command to the DeviceQueue DO |
+| `POST` | `/catt` | Dispatch command to the DeviceQueue DO |
 
 ### Request body
 
 ```json
-{"command": "cast|site|queue", "value": "...", "device": "o"}
+{"command": "cast|site|play|stop|prev|next", "value": "...", "device": "o"}
 ```
 
-`device` is optional — if provided, resolves via `getInputKey`, updates stored device, auto-resets `app` to `default` if audio-only.
+`device` is optional — if provided, resolves via `getInputKey`, updates stored device, auto-resets `app` to `default` if audio-only. Ignored for `play`, `stop`, `prev`, `next`.
 
 ### Commands
 
@@ -332,9 +332,13 @@ Single endpoint for ad-hoc curl usage.
 |---|---|---|---|
 | `cast` | input key or name | URL or redirect key | Clear queue + cancel alarm, cast immediately, update `prev`, schedule alarm |
 | `cast` | `queue` | URL or redirect key | Enqueue via `getParsedUrl`; plays immediately if idle, appends otherwise |
-| `site` | input key, name, or `queue` (uses stored device) | URL → `cast_site`; plain text → TTS (HTML on TV, spoken on audio device) | Stop + clear queue + cancel alarm |
+| `site` | input key, name, or omit | URL → `cast_site`; plain text → TTS (HTML on TV, spoken on audio device) | Stop + clear queue + cancel alarm |
+| `play` | — | — | Toggle play/pause on catt_server |
+| `stop` | — | — | Stop catt_server + clear queue + cancel alarm |
+| `prev` | — | — | Play previous |
+| `next` | — | — | Advance queue; casts ping if queue empty |
 
-`device` accepts aliases (`k`, `o`, `otv`) or full names (`Mini Kitchen`, `Office TV`). `"queue"` is a special value for `cast` that enqueues instead of casting immediately; for `site` it is ignored and the stored device is used.
+`device` accepts aliases (`k`, `o`, `otv`) or full names (`Mini Kitchen`, `Office TV`). `"queue"` is a special value for `cast` that enqueues instead of casting immediately.
 
 ### Examples
 
@@ -358,6 +362,12 @@ curl -X POST https://<worker>/catt \
 curl -X POST https://<worker>/catt \
   -H 'Content-Type: application/json' \
   -d '{"command": "site", "device": "tv", "value": "https://example.com"}'
+
+# Playback controls
+curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -d '{"command": "play"}'
+curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -d '{"command": "stop"}'
+curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -d '{"command": "prev"}'
+curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -d '{"command": "next"}'
 ```
 
 ---
