@@ -59,8 +59,8 @@ export const DEVICES: DeviceDefinition[] = [
       commandOnlyVolume: true,
       availableChannels: [
         { key: "ping",    names: ["ping"],          number: "1" },
-        { key: "pttv",    names: ["Tamil News"],    number: "2" },
-        { key: "sun",     names: ["Sun News"],      number: "3" },
+        { key: "sun",     names: ["Sun News"],      number: "2" },
+        { key: "pttv",    names: ["Tamil News"],    number: "3" },
         { key: "london",  names: ["Radio London"],  number: "4" },
         { key: "dubai",   names: ["Radio Dubai"],   number: "5" },
         { key: "lime",    names: ["Radio Lime"],    number: "6" },
@@ -93,6 +93,7 @@ export const INPUT_TO_DEVICE: Record<string, string> = {
   otv: "Office TV",
 };
 
+export const DEFAULT_CHANNEL  = "ping";
 export const DEFAULT_DEVICE   = "otv";
 export const DEFAULT_APP      = "default";
 export const DEFAULT_PREV     = "pingr2";
@@ -132,6 +133,19 @@ export function getInputKey(deviceId: string, input: string, fallback: string | 
     }
   }
   return fallback;
+}
+
+export function getAdjacentChannel(deviceId: string, currentKey: string, delta: number): string {
+  for (const d of DEVICES) {
+    if (d.id !== deviceId) continue;
+    const channels = d.attributes.availableChannels as Array<{ key: string; number: string }>;
+    const sorted = [...channels].sort((a, b) => Number(a.number) - Number(b.number));
+    const idx = sorted.findIndex((c) => c.key === currentKey);
+    const base = idx === -1 ? 0 : idx;
+    const next = (base + delta + sorted.length) % sorted.length;
+    return sorted[next].key;
+  }
+  return currentKey;
 }
 
 export function getChannelCode(deviceId: string, channelNumber: string): string | null {

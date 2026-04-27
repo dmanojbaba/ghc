@@ -1,7 +1,7 @@
 import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems, getParsedUrl } from "./urlHelper";
 import {
-  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_NOW, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME,
+  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_NOW, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME, DEFAULT_CHANNEL,
   resolveDevice, isAudioOnlyInput, getInputKey, DEVICE_ID,
 } from "./devices";
 
@@ -46,6 +46,7 @@ export class DeviceQueue implements DurableObject {
       app:      DEFAULT_APP,
       tts:      DEFAULT_TTS,
       device:   DEFAULT_DEVICE,
+      channel:  DEFAULT_CHANNEL,
       playlist: DEFAULT_PLAYLIST,
       volume:   String(DEFAULT_VOLUME),
     };
@@ -106,10 +107,11 @@ export class DeviceQueue implements DurableObject {
   private async clearState(): Promise<void> {
     this.sql.exec("DELETE FROM queue");
     await this.state.storage.deleteAlarm();
-    this.set("now",  DEFAULT_NOW);
-    this.set("prev", DEFAULT_PREV);
-    this.set("next", DEFAULT_NEXT);
-    this.set("tts",  DEFAULT_TTS);
+    this.set("now",     DEFAULT_NOW);
+    this.set("prev",    DEFAULT_PREV);
+    this.set("next",    DEFAULT_NEXT);
+    this.set("tts",     DEFAULT_TTS);
+    this.set("channel", DEFAULT_CHANNEL);
   }
 
   async clear(): Promise<void> {
@@ -238,6 +240,7 @@ export class DeviceQueue implements DurableObject {
       alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
       now:       this.get("now"),
       device:    this.get("device"),
+      channel:   this.get("channel"),
       app:       this.get("app"),
       volume:    Number(this.get("volume")) || DEFAULT_VOLUME,
       prev:      this.get("prev"),

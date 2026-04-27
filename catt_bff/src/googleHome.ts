@@ -3,7 +3,7 @@ import { getParsedUrl } from "./urlHelper";
 import {
   DEVICES, DEVICE_ID, INPUT_TO_DEVICE,
   DEFAULT_APP, DEFAULT_DEVICE, DEFAULT_VOLUME,
-  getInputKey, getChannelCode, isAudioOnlyInput,
+  getInputKey, getChannelCode, getAdjacentChannel, isAudioOnlyInput,
 } from "./devices";
 
 function randomString(length = 6): string {
@@ -138,11 +138,15 @@ async function handleExecute(
           const channelCode = String(
             params.channelCode ?? getChannelCode(DEVICE_ID, String(params.channelNumber)) ?? "",
           );
+          await doGet(stub, "/set/channel/" + channelCode);
           await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode)));
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.relativeChannel") {
-          const channelCode = String(params.relativeChannelChange) === "-1" ? "pttv" : "sun";
+          const currentChannel = String(doSt.channel);
+          const delta = Number(params.relativeChannelChange);
+          const channelCode = getAdjacentChannel(DEVICE_ID, currentChannel, delta);
+          await doGet(stub, "/set/channel/" + channelCode);
           await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode)));
           result = { status: "SUCCESS", states: { online: true } };
 

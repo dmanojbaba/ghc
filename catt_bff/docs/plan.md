@@ -84,13 +84,17 @@ Single logical device (`id: "box"`) representing all Chromecasts. Inputs map to 
 
 Default input on power-on: `otv`. Default playlist: `""` (unset).
 
-Channels: `ping` (1), `pttv` / Tamil News (2), `sun` / Sun News (3), `london` (4), `dubai` (5), `lime` (6), `chennai` (7).
+Channels: `ping` (1), `sun` / Sun News (2), `pttv` / Tamil News (3), `london` (4), `dubai` (5), `lime` (6), `chennai` (7).
+
+Default channel on power-on: `ping` (1).
 
 `INPUT_TO_DEVICE` maps input key → full catt_server device name string.
 
 Helper functions:
 - `getInputKey(deviceId, input, fallback)` — resolves alias or display name → key
 - `getChannelCode(deviceId, channelNumber)` — resolves channel number → key
+- `getAdjacentChannel(deviceId, currentKey, delta)` — returns the channel key ±delta positions away (wraps around); used by `relativeChannel`
+- `resolveDevice(input)` — maps input key → catt_server device name
 - `isAudioOnlyInput(deviceId, inputKey)` — returns `true` if any `name_synonym` for the input starts with `"mini"`; used to auto-reset `app` to `default` when switching to audio-only devices
 
 ---
@@ -127,6 +131,7 @@ The `kv` table replaces Cloudflare KV from the prototype.
 | `app` | `default` | `default` or `youtube` — controls `force_default` |
 | `tts` | `Hello World!` | Last TTS text |
 | `device` | `otv` | Active input key |
+| `channel` | `ping` | Last selected channel key; used by `relativeChannel` to compute adjacent channel |
 | `playlist` | `""` | YouTube playlist ID used by `mediaShuffle`; set via `/box/set/playlist/:id` |
 
 ### State Machine
@@ -163,11 +168,11 @@ STOPPED ──(enqueue when idle)──► PLAYING
 |---|---|
 | `enqueue(url, title?)` | Add to queue; if `now == stopped`, call `advance()` immediately |
 | `advance(userInitiated?)` | Pop next from queue; if empty + `userInitiated=true` → cast `DEFAULT_NEXT` (ping), set `now=stopped`, cancel alarm; if empty + not user-initiated → set `now=stopped`, cancel alarm, nothing cast; else cast item URL, set `now=playing`, set alarm in 10s (settle) |
-| `clear()` | Stop catt_server, cancel alarm, clear queue, reset `now`, `prev`, `next`, `tts` to defaults (preserves `app`, `device`, `playlist`) |
+| `clear()` | Stop catt_server, cancel alarm, clear queue, reset `now`, `prev`, `next`, `tts`, `channel` to defaults (preserves `app`, `device`, `playlist`) |
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 10s (settle) |
 | `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `now=playing`, schedule alarm |
 | `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration → 10s poll; if `getInfo` fails → `getStatus` fallback |
-| `getState()` | Return current state dict (alarm, now, device, app, volume, prev, next, playlist, tts, queue array) — `alarm` is ISO timestamp of next scheduled alarm or `null` |
+| `getState()` | Return current state dict (alarm, now, device, channel, app, volume, prev, next, playlist, tts, queue array) — `alarm` is ISO timestamp of next scheduled alarm or `null` |
 
 ### HTTP routes (handled inside DO `fetch`)
 
@@ -197,6 +202,7 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 | Resets `prev` | Yes | Yes | Yes | Yes |
 | Resets `next` | Yes | Yes | Yes | Yes |
 | Resets `tts` | Yes | Yes | Yes | Yes |
+| Resets `channel` | Yes | Yes | Yes | Yes |
 | Resets `app` | No | No | Sets `youtube` | No |
 | Resets `device` | No | No | Sets `otv` | No |
 | Resets `playlist` | No | No | No | No |
@@ -265,8 +271,8 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 | `OnOff` (off) | Call `/box/stop` (stops catt_server + clears queue + alarm); `app` and `device` left unchanged |
 | `SetModes` | Update `app` state in DO |
 | `SetInput` | Update `device` state in DO |
-| `selectChannel` | Enqueue channel URL via DO (`/cast/:url`) — URL resolved via `getParsedUrl` |
-| `relativeChannel` | -1 → pttv, +1 → sun — enqueued via DO (`/cast/:url`), URL resolved via `getParsedUrl` |
+| `selectChannel` | Store channel key via `/set/channel/:key`, enqueue channel URL via DO (`/cast/:url`) — URL resolved via `getParsedUrl` |
+| `relativeChannel` | Read `channel` from DO state, compute adjacent channel via `getAdjacentChannel` (wraps around), store via `/set/channel/:key`, enqueue via DO (`/cast/:url`) |
 | `returnChannel` | `playPrev()` |
 | `mediaShuffle` | `shuffle()` using saved `playlist` state key |
 | `mediaPrevious` | `playPrev()` |
