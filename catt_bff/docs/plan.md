@@ -179,12 +179,27 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 | `GET` | `/device/box/play` | `play_toggle` on catt_server |
 | `GET` | `/device/box/prev` | `playPrev()` |
 | `GET` | `/device/box/next` | `advance()` |
-| `GET` | `/device/box/stop` | `clear()` |
-| `GET` | `/device/box/clear` | Clear queue + reset `now`, keep other state |
+| `GET` | `/device/box/stop` | Stop catt_server + clear queue + cancel alarm + reset `now`, `prev`, `next`, `tts` |
+| `GET` | `/device/box/clear` | Clear queue + cancel alarm + reset `now`, `prev`, `next`, `tts` — no catt_server call |
 | `GET/POST` | `/device/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
 | `GET/POST` | `/device/box/site/:arg` | Stop + cancel alarm + set `now=stopped`; cast_site URL if http, else TTS (HTML on TV, `tts` command on others) |
 | `GET` | `/device/box/shuffle` | `shuffle(playlist)` using saved `playlist` state key |
 | `GET` | `/device/box/set/:key/:value` | Set a kv state key; setting `device` to an audio-only input (name starts with "mini") auto-resets `app` to `default` |
+
+### `/clear` vs `/stop` vs `OnOff`
+
+| | `/clear` | `/stop` | `OnOff` on | `OnOff` off |
+|---|---|---|---|---|
+| Calls catt_server `stop` | No | Yes | No | Yes |
+| Clears queue | Yes | Yes | Yes | Yes |
+| Cancels alarm | Yes | Yes | Yes | Yes |
+| Resets `now` | Yes | Yes | Yes | Yes |
+| Resets `prev` | Yes | Yes | Yes | Yes |
+| Resets `next` | Yes | Yes | Yes | Yes |
+| Resets `tts` | Yes | Yes | Yes | Yes |
+| Resets `app` | No | No | Sets `youtube` | No |
+| Resets `device` | No | No | Sets `otv` | No |
+| Resets `playlist` | No | No | No | No |
 
 ---
 

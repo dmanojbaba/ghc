@@ -3,7 +3,7 @@ import { getParsedUrl } from "./urlHelper";
 import {
   DEVICES, DEVICE_ID, INPUT_TO_DEVICE,
   DEFAULT_APP, DEFAULT_DEVICE, DEFAULT_VOLUME,
-  getInputKey, getChannelCode,
+  getInputKey, getChannelCode, isAudioOnlyInput,
 } from "./devices";
 
 function randomString(length = 6): string {
@@ -105,10 +105,21 @@ async function handleExecute(
             await doGet(stub, "/clear");
             await doGet(stub, "/set/app/youtube");
             await doGet(stub, "/set/device/" + DEFAULT_DEVICE);
+            result = {
+              status: "SUCCESS",
+              states: {
+                on: true,
+                online: true,
+                playbackState: "STOPPED",
+                currentInput: DEFAULT_DEVICE,
+                currentApplication: "youtube",
+                currentModeSettings: { app_mode: "youtube" },
+              },
+            };
           } else {
             await doGet(stub, "/stop");
+            result = { status: "SUCCESS", states: { on: false, online: true, playbackState: "STOPPED" } };
           }
-          result = { status: "SUCCESS", states: { on: params.on, online: true, playbackState: "STOPPED" } };
 
         } else if (command === "action.devices.commands.SetModes") {
           const appMode = (params.updateModeSettings as Record<string, string>)?.app_mode ?? DEFAULT_APP;
@@ -119,7 +130,16 @@ async function handleExecute(
           const newInput = String(params.newInput);
           const key      = getInputKey(DEVICE_ID, newInput, null) ?? newInput;
           await doGet(stub, "/set/device/" + key);
-          result = { status: "SUCCESS", states: { online: true, currentInput: key } };
+          const newApp   = isAudioOnlyInput(DEVICE_ID, key) ? DEFAULT_APP : String(doSt.app ?? DEFAULT_APP);
+          result = {
+            status: "SUCCESS",
+            states: {
+              online: true,
+              currentInput: key,
+              currentApplication: newApp,
+              currentModeSettings: { app_mode: newApp },
+            },
+          };
 
         } else if (command === "action.devices.commands.selectChannel") {
           const channelCode = String(
