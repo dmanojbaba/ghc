@@ -10,7 +10,15 @@ npm run start   # wrangler dev (local)
 npm run deploy  # wrangler deploy
 ```
 
-No test suite exists for this project.
+```bash
+npm test            # vitest run (once)
+npm run test:watch  # vitest watch
+```
+
+Run a single test file:
+```bash
+npx vitest run src/tests/index.test.js
+```
 
 ## Architecture
 
@@ -23,7 +31,7 @@ Single-file Cloudflare Worker (`src/index.js`). URL shortener and redirect servi
 | `/ip` | Returns the caller's IP (`CF-Connecting-IP`) |
 | `/kv` | Lists all KV keys |
 | `/kv/<key>` | Returns KV value for key (add `?output=json` for JSON) |
-| `/r/<key>` | Redirects to KV value; if key not found, falls back to YouTube search |
+| `/r/<key>` | Redirects (302) to KV value; if key not found, falls back to YouTube search |
 | `/r2/<key>` | Streams file from R2 bucket `md24` |
 | `/y/<key>` | Returns raw YouTube search result as JSON |
 
@@ -47,6 +55,8 @@ Single-file Cloudflare Worker (`src/index.js`). URL shortener and redirect servi
 
 ### YouTube search logic (`searchYoutube`)
 
-- Single-word input with no spaces → treated as a video ID, returns `youtube.com/watch?v=<id>` directly
+- Single-word input (no spaces), `raw=false` → returns `youtube.com/watch?v=<id>` directly without an API call
+- Single-word input (no spaces), `raw=true` → looks up the video ID via the YouTube `/videos` API and returns result JSON
 - Multi-word input → calls YouTube Search API, iterates results looking for a title match (exact or `altMatchText` prefix); falls back to first result
-- `raw=true` → returns full search result JSON instead of a URL
+- `raw=false` → returns a YouTube URL string
+- `raw=true` → returns JSON with `result`, `videoUrl`, `videoTitle`; `result` is `"N/total"` (match position) or `"0/total"` (no match found, fell back to first result)

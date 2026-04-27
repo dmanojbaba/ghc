@@ -171,6 +171,7 @@ Cloudflare Worker (`src/index.js`). URL shortener and redirect service deployed 
 ```bash
 cd redirect
 npm install
+wrangler secret put YOUTUBE_API_KEY
 npm run start   # wrangler dev (local)
 npm run deploy  # wrangler deploy
 ```
@@ -182,7 +183,7 @@ npm run deploy  # wrangler deploy
 | `/ip` | Returns the caller's IP (`CF-Connecting-IP`) |
 | `/kv` | Lists all KV keys |
 | `/kv/<key>` | Returns KV value for key (add `?output=json` for JSON) |
-| `/r/<key>` | Redirects to KV value; if key not found, falls back to YouTube search |
+| `/r/<key>` | Redirects (302) to KV value; if key not found, falls back to YouTube search |
 | `/r2/<key>` | Streams file from R2 bucket `md24` |
 | `/y/<key>` | Returns raw YouTube search result as JSON |
 
@@ -197,10 +198,6 @@ npm run deploy  # wrangler deploy
 
 - **`0 6-22 * * *`** (hourly, 6am–10pm): Searches YouTube for latest Puthiyathalaimurai and Sun News headlines and updates `pttv` and `sun` KV keys.
 - **`3 3 * * *`** (3:03am daily): No-op placeholder.
-
-```bash
-wrangler secret put YOUTUBE_API_KEY
-```
 
 ## CI/CD
 
