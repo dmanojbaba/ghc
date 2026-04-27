@@ -27,6 +27,15 @@ export default {
     const path   = url.pathname;
     const method = request.method.toUpperCase();
 
+    // Auth check for all routes except Google Home and OAuth
+    const isPublicPath = path === "/fulfillment" || path.startsWith("/oauth/") || path === "/echo";
+    if (!isPublicPath) {
+      const apiKey = env.CATT_API_KEY;
+      if (apiKey && request.headers.get("X-API-Key") !== apiKey) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+    }
+
     // Google Home fulfillment
     if (path === "/fulfillment" && method === "POST") {
       return handleFulfillment(request, env, getDoStub(env, DEVICE_ID));

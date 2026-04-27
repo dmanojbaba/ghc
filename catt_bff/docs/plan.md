@@ -407,9 +407,10 @@ crons = ["3 3 * * *"]   # 03:03 UTC daily — clear all device queues
 
 | Secret | Description |
 |---|---|
+| `CATT_API_KEY` | Shared secret required on all non-Google routes via `X-API-Key` header; if unset, auth is skipped (dev mode) |
 | `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
-| `YOUTUBE_API_KEY` | Google YouTube Data API v3 key (for playlist fetching) |
 | `TELEGRAM_SECRET_TOKEN` | Validates incoming Telegram webhook requests |
+| `YOUTUBE_API_KEY` | Google YouTube Data API v3 key (for playlist fetching) |
 
 ---
 

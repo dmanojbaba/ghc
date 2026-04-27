@@ -60,6 +60,7 @@ Cloudflare Worker. Requires three secrets set via `wrangler secret put`:
 | `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key (for playlist shuffle) |
 | `TELEGRAM_SECRET_TOKEN` | Validates incoming Telegram webhook requests |
+| `CATT_API_KEY` | Shared secret required on all non-Google routes via `X-API-Key` header; if unset, auth is skipped |
 
 ```bash
 cd catt_bff
@@ -109,26 +110,30 @@ wrangler deploy
 # Cast immediately on Mini Office
 curl -X POST https://<worker>/catt \
   -H 'Content-Type: application/json' \
+  -H 'X-API-Key: <your-api-key>' \
   -d '{"command": "cast", "device": "o", "value": "https://youtube.com/watch?v=..."}'
 
 # Add to queue
 curl -X POST https://<worker>/catt \
   -H 'Content-Type: application/json' \
+  -H 'X-API-Key: <your-api-key>' \
   -d '{"command": "cast", "device": "queue", "value": "https://youtube.com/watch?v=..."}'
 
 # TTS on Office TV
 curl -X POST https://<worker>/catt \
   -H 'Content-Type: application/json' \
+  -H 'X-API-Key: <your-api-key>' \
   -d '{"command": "site", "device": "otv", "value": "Hello World"}'
 
 # Cast site on Office TV
 curl -X POST https://<worker>/catt \
   -H 'Content-Type: application/json' \
+  -H 'X-API-Key: <your-api-key>' \
   -d '{"command": "site", "device": "otv", "value": "https://example.com"}'
 
 # Playback controls
-curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -d '{"command": "play"}'
-curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -d '{"command": "next"}'
+curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API-Key: <your-api-key>' -d '{"command": "play"}'
+curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API-Key: <your-api-key>' -d '{"command": "next"}'
 ```
 
 #### `GET /device/box/*` — Queue controls
