@@ -102,6 +102,10 @@ export const DEFAULT_TTS      = "Hello World!";
 export const DEFAULT_PLAYLIST = "";
 export const DEFAULT_VOLUME   = 50;
 
+export function resolveDevice(input: string): string {
+  return INPUT_TO_DEVICE[input] ?? input;
+}
+
 export function isAudioOnlyInput(deviceId: string, inputKey: string): boolean {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;

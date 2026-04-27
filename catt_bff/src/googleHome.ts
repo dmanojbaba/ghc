@@ -15,11 +15,6 @@ function randomString(length = 6): string {
   return result;
 }
 
-function getDoStub(env: Env, deviceId: string): DurableObjectStub {
-  const id = env.DEVICE_QUEUE.idFromName(deviceId);
-  return env.DEVICE_QUEUE.get(id);
-}
-
 async function doGet(stub: DurableObjectStub, path: string): Promise<void> {
   await stub.fetch(`https://do/device/box${path}`);
 }
@@ -42,13 +37,12 @@ export async function handleSync(requestId: string): Promise<Record<string, unkn
 export async function handleQuery(
   requestId: string,
   payload: { devices: Array<{ id: string }> },
-  env: Env,
+  stub: DurableObjectStub,
 ): Promise<Record<string, unknown>> {
   const states: Record<string, unknown> = {};
 
   for (const device of payload.devices) {
     if (device.id === DEVICE_ID) {
-      const stub      = getDoStub(env, DEVICE_ID);
       const doSt      = await doState(stub);
       const inputKey  = String(doSt.device ?? DEFAULT_DEVICE);
 
@@ -79,6 +73,7 @@ async function handleExecute(
       execution: Array<{ command: string; params?: Record<string, unknown> }>;
     }>;
   },
+  stub: DurableObjectStub,
   env: Env,
 ): Promise<Record<string, unknown>> {
   const results: unknown[] = [];
@@ -89,8 +84,6 @@ async function handleExecute(
         results.push({ ids: [device.id], status: "SUCCESS", states: { online: true } });
         continue;
       }
-
-      const stub = getDoStub(env, DEVICE_ID);
       const doSt = await doState(stub);
       const inputKey   = String(doSt.device ?? DEFAULT_DEVICE);
       const cattDevice = INPUT_TO_DEVICE[inputKey] ?? inputKey;
@@ -212,7 +205,7 @@ async function handleExecute(
   return { requestId, payload: { commands: results } };
 }
 
-export async function handleFulfillment(request: Request, env: Env): Promise<Response> {
+export async function handleFulfillment(request: Request, env: Env, stub: DurableObjectStub): Promise<Response> {
   const body      = await request.json() as {
     requestId: string;
     inputs: Array<{ intent: string; payload?: unknown }>;
@@ -227,9 +220,9 @@ export async function handleFulfillment(request: Request, env: Env): Promise<Res
     } else if (input.intent === "action.devices.DISCONNECT") {
       return Response.json({});
     } else if (input.intent === "action.devices.QUERY") {
-      result = await handleQuery(requestId, input.payload as Parameters<typeof handleQuery>[1], env);
+      result = await handleQuery(requestId, input.payload as Parameters<typeof handleQuery>[1], stub);
     } else if (input.intent === "action.devices.EXECUTE") {
-      result = await handleExecute(requestId, input.payload as Parameters<typeof handleExecute>[1], env);
+      result = await handleExecute(requestId, input.payload as Parameters<typeof handleExecute>[1], stub, env);
     }
   }
 

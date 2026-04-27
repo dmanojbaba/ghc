@@ -182,7 +182,7 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 | `GET` | `/device/box/stop` | Stop catt_server + clear queue + cancel alarm + reset `now`, `prev`, `next`, `tts` |
 | `GET` | `/device/box/clear` | Clear queue + cancel alarm + reset `now`, `prev`, `next`, `tts` — no catt_server call |
 | `GET/POST` | `/device/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
-| `GET/POST` | `/device/box/site/:arg` | Stop + cancel alarm + set `now=stopped`; cast_site URL if http, else TTS (HTML on TV, `tts` command on others) |
+| `GET/POST` | `/device/box/site/:arg` | Stop + clear queue + cancel alarm + set `now=stopped`; cast_site URL if http, else TTS (HTML on TV via `/echo?text=`, `tts` command on others) |
 | `GET` | `/device/box/shuffle` | `shuffle(playlist)` using saved `playlist` state key |
 | `GET` | `/device/box/set/:key/:value` | Set a kv state key; setting `device` to an audio-only input (name starts with "mini") auto-resets `app` to `default` |
 

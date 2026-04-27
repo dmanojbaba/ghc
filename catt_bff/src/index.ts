@@ -29,7 +29,7 @@ export default {
 
     // Google Home fulfillment
     if (path === "/fulfillment" && method === "POST") {
-      return handleFulfillment(request, env);
+      return handleFulfillment(request, env, getDoStub(env, DEVICE_ID));
     }
 
     // Debug: verify SYNC response without going through Google
@@ -39,7 +39,7 @@ export default {
 
     // Debug: verify QUERY response without going through Google
     if (path === "/gquery" && method === "GET") {
-      return new Response(JSON.stringify(await handleQuery("debug", { devices: [{ id: DEVICE_ID }] }, env), null, 2), { headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify(await handleQuery("debug", { devices: [{ id: DEVICE_ID }] }, getDoStub(env, DEVICE_ID)), null, 2), { headers: { "content-type": "application/json" } });
     }
 
     // OAuth

@@ -2,7 +2,7 @@ import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems, getParsedUrl } from "./urlHelper";
 import {
   DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_NOW, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME,
-  INPUT_TO_DEVICE, isAudioOnlyInput, getInputKey, DEVICE_ID,
+  resolveDevice, isAudioOnlyInput, getInputKey, DEVICE_ID,
 } from "./devices";
 
 const POLL_INTERVAL_MS   = 10_000;
@@ -52,10 +52,6 @@ export class DeviceQueue implements DurableObject {
     return defaults[key] ?? "";
   }
 
-  private resolveDevice(input: string): string {
-    return INPUT_TO_DEVICE[input] ?? input;
-  }
-
   private get serverUrl(): string {
     return this.env.CATT_SERVER_URL;
   }
@@ -86,7 +82,7 @@ export class DeviceQueue implements DurableObject {
 
     if (!row) {
       if (userInitiated) {
-        const device = this.resolveDevice(this.get("device"));
+        const device = resolveDevice(this.get("device"));
         await castCommand(this.serverUrl, device, "cast", getParsedUrl(DEFAULT_NEXT), {
           force_default: this.forceDefault(),
         });
@@ -97,7 +93,7 @@ export class DeviceQueue implements DurableObject {
     }
 
     this.sql.exec("DELETE FROM queue WHERE position = ?", row.position);
-    const device = this.resolveDevice(this.get("device"));
+    const device = resolveDevice(this.get("device"));
     await castCommand(this.serverUrl, device, "cast", row.url, {
       title:         row.title ?? undefined,
       force_default: this.forceDefault(),
@@ -107,19 +103,23 @@ export class DeviceQueue implements DurableObject {
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
   }
 
-  async clear(): Promise<void> {
-    const device = this.resolveDevice(this.get("device"));
-    await castCommand(this.serverUrl, device, "stop");
-    await this.state.storage.deleteAlarm();
+  private async clearState(): Promise<void> {
     this.sql.exec("DELETE FROM queue");
+    await this.state.storage.deleteAlarm();
     this.set("now",  DEFAULT_NOW);
     this.set("prev", DEFAULT_PREV);
     this.set("next", DEFAULT_NEXT);
     this.set("tts",  DEFAULT_TTS);
   }
 
+  async clear(): Promise<void> {
+    const device = resolveDevice(this.get("device"));
+    await castCommand(this.serverUrl, device, "stop");
+    await this.clearState();
+  }
+
   async shuffle(playlistId: string): Promise<void> {
-    const device = this.resolveDevice(this.get("device"));
+    const device = resolveDevice(this.get("device"));
     let first: string;
     let rest: string[];
     try {
@@ -142,9 +142,28 @@ export class DeviceQueue implements DurableObject {
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
   }
 
+  private async playSite(arg: string, host: string): Promise<void> {
+    const device = resolveDevice(this.get("device"));
+    await castCommand(this.serverUrl, device, "stop");
+    this.sql.exec("DELETE FROM queue");
+    await this.state.storage.deleteAlarm();
+    this.set("now", DEFAULT_NOW);
+    if (arg.startsWith("http")) {
+      await castCommand(this.serverUrl, device, "cast_site", arg);
+    } else {
+      this.set("tts", arg);
+      if (device.toLowerCase().includes("tv")) {
+        await castCommand(this.serverUrl, device, "cast_site", `https://${host}/echo?text=${encodeURIComponent(arg)}`);
+      } else {
+        this.set("prev", "tts");
+        await castCommand(this.serverUrl, device, "tts", arg);
+      }
+    }
+  }
+
   async playPrev(): Promise<void> {
     const rawPrev = this.get("prev");
-    const device  = this.resolveDevice(this.get("device"));
+    const device  = resolveDevice(this.get("device"));
 
     if (rawPrev === "tts") {
       await castCommand(this.serverUrl, device, "tts", this.get("tts"));
@@ -165,7 +184,7 @@ export class DeviceQueue implements DurableObject {
 
   async alarm(): Promise<void> {
     if (this.get("now") === DEFAULT_NOW) return;
-    const device = this.resolveDevice(this.get("device"));
+    const device = resolveDevice(this.get("device"));
 
     try {
       const info        = await getInfo(this.serverUrl, device);
@@ -247,7 +266,7 @@ export class DeviceQueue implements DurableObject {
         return new Response("ok");
 
       case "play": {
-        const device = this.resolveDevice(this.get("device"));
+        const device = resolveDevice(this.get("device"));
         await castCommand(this.serverUrl, device, "play_toggle");
         return new Response("ok");
       }
@@ -257,12 +276,7 @@ export class DeviceQueue implements DurableObject {
         return new Response("ok");
 
       case "clear":
-        this.sql.exec("DELETE FROM queue");
-        this.set("now",  DEFAULT_NOW);
-        this.set("prev", DEFAULT_PREV);
-        this.set("next", DEFAULT_NEXT);
-        this.set("tts",  DEFAULT_TTS);
-        await this.state.storage.deleteAlarm();
+        await this.clearState();
         return new Response("ok");
 
       case "cast": {
@@ -279,22 +293,7 @@ export class DeviceQueue implements DurableObject {
 
       case "site": {
         const rawArg = decodeURIComponent(parts.slice(3).join("/"));
-        const device = this.resolveDevice(this.get("device"));
-        await castCommand(this.serverUrl, device, "stop");
-        await this.state.storage.deleteAlarm();
-        this.set("now", DEFAULT_NOW);
-        if (rawArg.startsWith("http")) {
-          await castCommand(this.serverUrl, device, "cast_site", rawArg);
-        } else {
-          this.set("tts", rawArg);
-          if (device.toLowerCase().includes("tv")) {
-            const echoUrl = `https://${new URL(request.url).host}/echo`;
-            await castCommand(this.serverUrl, device, "cast_site", echoUrl);
-          } else {
-            this.set("prev", "tts");
-            await castCommand(this.serverUrl, device, "tts", rawArg);
-          }
-        }
+        await this.playSite(rawArg, new URL(request.url).host);
         return new Response("ok");
       }
 
@@ -310,7 +309,7 @@ export class DeviceQueue implements DurableObject {
           if (isAudioOnlyInput(DEVICE_ID, key)) this.set("app", DEFAULT_APP);
         }
 
-        const device = this.resolveDevice(this.get("device"));
+        const device = resolveDevice(this.get("device"));
 
         if (cmd === "cast") {
           const parsedUrl = getParsedUrl(val);
@@ -328,22 +327,7 @@ export class DeviceQueue implements DurableObject {
           }
 
         } else if (cmd === "site") {
-          await castCommand(this.serverUrl, device, "stop");
-          this.sql.exec("DELETE FROM queue");
-          await this.state.storage.deleteAlarm();
-          this.set("now", DEFAULT_NOW);
-          if (val.startsWith("http")) {
-            await castCommand(this.serverUrl, device, "cast_site", val);
-          } else {
-            this.set("tts", val);
-            if (device.toLowerCase().includes("tv")) {
-              const echoUrl = `https://${new URL(request.url).host}/echo`;
-              await castCommand(this.serverUrl, device, "cast_site", echoUrl);
-            } else {
-              this.set("prev", "tts");
-              await castCommand(this.serverUrl, device, "tts", val);
-            }
-          }
+          await this.playSite(val, new URL(request.url).host);
 
         } else {
           return new Response("unknown command", { status: 400 });

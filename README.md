@@ -134,7 +134,7 @@ curl -X POST https://<worker>/catt \
 | `/device/box/stop` | Stop playback, clear queue, cancel alarm |
 | `/device/box/clear` | Clear queue + cancel alarm, no catt_server call |
 | `/device/box/cast/:url` | Enqueue URL |
-| `/device/box/site/:arg` | Stop + cast_site URL, or TTS text |
+| `/device/box/site/:arg` | Stop + clear queue + cast_site URL, or TTS text |
 | `/device/box/shuffle` | Shuffle saved playlist |
 | `/device/box/set/:key/:value` | Set state key (e.g. `device`, `app`, `playlist`, `volume`) |
 
