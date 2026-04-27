@@ -1,0 +1,26 @@
+name = "redirect"
+main = "src/index.js"
+compatibility_date = "2022-10-21"
+env = { }
+
+workers_dev = true
+
+kv_namespaces = [
+  { binding = "kv", preview_id = "a53b38be84d94a209ec93755c32141dc", id = "be6bd0ccbf1148c9a1c90a38598697cb" }
+]
+
+routes = [
+  { pattern = "r.manojbaba.com", custom_domain = true },
+  { pattern = "w.manojbaba.com", custom_domain = true }
+]
+
+[triggers]
+crons = ["0 6-22 * * *", "3 3 * * *"]
+
+[[r2_buckets]]
+binding = 'r2bkt'
+bucket_name = 'md24'
+preview_bucket_name = 'md24'
+
+[vars]
+# API_KEY

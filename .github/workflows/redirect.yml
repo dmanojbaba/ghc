@@ -1,0 +1,43 @@
+name: redirect
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: [ redirect/** ]
+  push:
+    branches: [ main ]
+    paths: [ redirect/** ]
+
+jobs:
+  wrangler-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: redirect/package-lock.json
+
+      - name: Install dependencies
+        working-directory: redirect
+        run: npm ci
+
+      - name: Run tests
+        working-directory: redirect
+        run: npm test
+
+      - name: Dry run deploy
+        if: github.event_name == 'pull_request'
+        working-directory: redirect
+        run: npx wrangler deploy --dry-run
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy
+        if: github.event_name != 'pull_request'
+        working-directory: redirect
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
