@@ -154,10 +154,11 @@ export class DeviceQueue implements DurableObject {
       });
     }
 
-    this.set("now", "playing");
     if (rawPrev !== DEFAULT_PREV && rawPrev !== "tts") {
+      this.set("now", "playing");
       await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
     } else {
+      this.set("now", DEFAULT_NOW);
       await this.state.storage.deleteAlarm();
     }
   }
