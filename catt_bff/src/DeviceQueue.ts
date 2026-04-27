@@ -217,7 +217,7 @@ export class DeviceQueue implements DurableObject {
 
     switch (action) {
       case "state":
-        return Response.json(this.getState());
+        return new Response(JSON.stringify(this.getState(), null, 2), { headers: { "content-type": "application/json" } });
 
       case "prev":
         await this.playPrev();
