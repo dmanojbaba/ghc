@@ -2,7 +2,7 @@ import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems } from "./urlHelper";
 import {
   DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_NOW, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME,
-  INPUT_TO_DEVICE,
+  INPUT_TO_DEVICE, isAudioOnlyInput,
 } from "./devices";
 
 const POLL_INTERVAL_MS   = 10_000;
@@ -284,7 +284,12 @@ export class DeviceQueue implements DurableObject {
       case "set": {
         const key   = parts[3];
         const value = parts[4] ?? "";
-        if (key) this.set(key, value);
+        if (key) {
+          this.set(key, value);
+          if (key === "device" && isAudioOnlyInput("box", value)) {
+            this.set("app", DEFAULT_APP);
+          }
+        }
         return new Response("ok");
       }
 
