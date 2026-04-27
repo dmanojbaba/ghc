@@ -84,6 +84,60 @@ wrangler deploy
 | `GET /gsync` | Debug: returns SYNC response without going through Google (pretty-printed JSON) |
 | `GET /gquery` | Debug: returns live QUERY state without going through Google (pretty-printed JSON) |
 
+### API Reference
+
+#### `POST /catt` — Ad-hoc commands
+
+```json
+{"command": "cast|site", "device": "<key|name|queue>", "value": "..."}
+```
+
+| `command` | `device` | `value` | Effect |
+|---|---|---|---|
+| `cast` | input key or name | URL or redirect key | Clear queue, cast immediately |
+| `cast` | `queue` | URL or redirect key | Enqueue; plays immediately if idle |
+| `site` | input key, name, or omit | URL | `cast_site` the URL |
+| `site` | input key, name, or omit | plain text | TTS: HTML on TV, spoken on audio device |
+
+`device` accepts aliases (`k`, `o`, `otv`) or full names (`Mini Kitchen`, `Office TV`). Switching to a Mini device auto-resets `app` to `default`.
+
+```bash
+# Cast immediately on Mini Office
+curl -X POST https://<worker>/catt \
+  -H 'Content-Type: application/json' \
+  -d '{"command": "cast", "device": "o", "value": "https://youtube.com/watch?v=..."}'
+
+# Add to queue
+curl -X POST https://<worker>/catt \
+  -H 'Content-Type: application/json' \
+  -d '{"command": "cast", "device": "queue", "value": "https://youtube.com/watch?v=..."}'
+
+# TTS on Office TV
+curl -X POST https://<worker>/catt \
+  -H 'Content-Type: application/json' \
+  -d '{"command": "site", "device": "otv", "value": "Hello World"}'
+
+# Cast site on Office TV
+curl -X POST https://<worker>/catt \
+  -H 'Content-Type: application/json' \
+  -d '{"command": "site", "device": "otv", "value": "https://example.com"}'
+```
+
+#### `GET /device/box/*` — Queue controls
+
+| Path | Effect |
+|---|---|
+| `/device/box/state` | Returns current state as pretty-printed JSON (now, device, app, volume, prev, next, playlist, tts, alarm, queue) |
+| `/device/box/play` | Toggle play/pause |
+| `/device/box/prev` | Play previous (replays last TTS if `prev=tts`, plays pingr2 if no history) |
+| `/device/box/next` | Advance queue; casts ping if queue empty |
+| `/device/box/stop` | Stop playback, clear queue, cancel alarm |
+| `/device/box/clear` | Clear queue + cancel alarm, no catt_server call |
+| `/device/box/cast/:url` | Enqueue URL |
+| `/device/box/site/:arg` | Stop + cast_site URL, or TTS text |
+| `/device/box/shuffle` | Shuffle saved playlist |
+| `/device/box/set/:key/:value` | Set state key (e.g. `device`, `app`, `playlist`, `volume`) |
+
 ## CI/CD
 
 | Workflow | Trigger | Actions |
