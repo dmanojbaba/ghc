@@ -57,6 +57,10 @@ export class DeviceQueue implements DurableObject {
     return this.env.CATT_SERVER_URL;
   }
 
+  private get secret(): string | undefined {
+    return this.env.CATT_SERVER_SECRET || undefined;
+  }
+
   private forceDefault(): boolean {
     return this.get("app") === DEFAULT_APP;
   }
@@ -86,7 +90,7 @@ export class DeviceQueue implements DurableObject {
         const device = resolveDevice(this.get("device"));
         await castCommand(this.serverUrl, device, "cast", getParsedUrl(DEFAULT_NEXT), {
           force_default: this.forceDefault(),
-        });
+        }, this.secret);
       }
       this.set("now", DEFAULT_NOW);
       await this.state.storage.deleteAlarm();
@@ -98,7 +102,7 @@ export class DeviceQueue implements DurableObject {
     await castCommand(this.serverUrl, device, "cast", row.url, {
       title:         row.title ?? undefined,
       force_default: this.forceDefault(),
-    });
+    }, this.secret);
     this.set("prev", row.url);
     this.set("now", "playing");
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
@@ -116,7 +120,7 @@ export class DeviceQueue implements DurableObject {
 
   async clear(): Promise<void> {
     const device = resolveDevice(this.get("device"));
-    await castCommand(this.serverUrl, device, "stop");
+    await castCommand(this.serverUrl, device, "stop", undefined, undefined, this.secret);
     await this.clearState();
   }
 
@@ -139,26 +143,26 @@ export class DeviceQueue implements DurableObject {
     this.set("prev", first);
     await castCommand(this.serverUrl, device, "cast", first, {
       force_default: this.forceDefault(),
-    });
+    }, this.secret);
     this.set("now", "playing");
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
   }
 
   private async playSite(arg: string, host: string): Promise<void> {
     const device = resolveDevice(this.get("device"));
-    await castCommand(this.serverUrl, device, "stop");
+    await castCommand(this.serverUrl, device, "stop", undefined, undefined, this.secret);
     this.sql.exec("DELETE FROM queue");
     await this.state.storage.deleteAlarm();
     this.set("now", DEFAULT_NOW);
     if (arg.startsWith("http")) {
-      await castCommand(this.serverUrl, device, "cast_site", arg);
+      await castCommand(this.serverUrl, device, "cast_site", arg, undefined, this.secret);
     } else {
       this.set("tts", arg);
       if (device.toLowerCase().includes("tv")) {
-        await castCommand(this.serverUrl, device, "cast_site", `https://${host}/echo?text=${encodeURIComponent(arg)}`);
+        await castCommand(this.serverUrl, device, "cast_site", `https://${host}/echo?text=${encodeURIComponent(arg)}`, undefined, this.secret);
       } else {
         this.set("prev", "tts");
-        await castCommand(this.serverUrl, device, "tts", arg);
+        await castCommand(this.serverUrl, device, "tts", arg, undefined, this.secret);
       }
     }
   }
@@ -168,11 +172,11 @@ export class DeviceQueue implements DurableObject {
     const device  = resolveDevice(this.get("device"));
 
     if (rawPrev === "tts") {
-      await castCommand(this.serverUrl, device, "tts", this.get("tts"));
+      await castCommand(this.serverUrl, device, "tts", this.get("tts"), undefined, this.secret);
     } else {
       await castCommand(this.serverUrl, device, "cast", getParsedUrl(rawPrev), {
         force_default: this.forceDefault(),
-      });
+      }, this.secret);
     }
 
     if (rawPrev !== DEFAULT_PREV && rawPrev !== "tts") {
@@ -189,7 +193,7 @@ export class DeviceQueue implements DurableObject {
     const device = resolveDevice(this.get("device"));
 
     try {
-      const info        = await getInfo(this.serverUrl, device);
+      const info        = await getInfo(this.serverUrl, device, this.secret);
       const state       = info.data?.player_state ?? "UNKNOWN";
       const duration    = info.data?.duration;
       const currentTime = info.data?.current_time ?? 0;
@@ -211,7 +215,7 @@ export class DeviceQueue implements DurableObject {
     } catch {
       // getInfo failed — fall back to getStatus + regular polling
       try {
-        const statusRes = await getStatus(this.serverUrl, device);
+        const statusRes = await getStatus(this.serverUrl, device, this.secret);
         const state     = statusRes.data?.player_state ?? "UNKNOWN";
         if (statusRes.data?.volume_level !== undefined) {
           this.set("volume", String(Math.round(statusRes.data.volume_level * 100)));
@@ -270,7 +274,7 @@ export class DeviceQueue implements DurableObject {
 
       case "play": {
         const device = resolveDevice(this.get("device"));
-        await castCommand(this.serverUrl, device, "play_toggle");
+        await castCommand(this.serverUrl, device, "play_toggle", undefined, undefined, this.secret);
         return new Response("ok");
       }
 
@@ -323,7 +327,7 @@ export class DeviceQueue implements DurableObject {
             await this.state.storage.deleteAlarm();
             await castCommand(this.serverUrl, device, "cast", parsedUrl, {
               force_default: this.forceDefault(),
-            });
+            }, this.secret);
             this.set("prev", parsedUrl);
             this.set("now", "playing");
             await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);

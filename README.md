@@ -26,10 +26,19 @@ Flask app running on port 5000. All commands go to `POST /catt` with a JSON body
 
 ```bash
 docker build -t catt-server ./catt_server
-docker run --network host catt-server
+docker run --network host -e CATT_SERVER_SECRET=your-secret catt-server
 ```
 
-> `--network host` is required for mDNS Chromecast discovery.
+> `--network host` is required for mDNS Chromecast discovery. `CATT_SERVER_SECRET` is optional — if unset, auth is skipped.
+
+On the Pi, the service is managed by systemd (`catt/catt.service`). The secret is loaded from `/home/pi/dotfiles/catt/.env`:
+
+```bash
+echo "CATT_SERVER_SECRET=your-secret" > /home/pi/dotfiles/catt/.env
+chmod 600 /home/pi/dotfiles/catt/.env
+sudo systemctl daemon-reload
+sudo systemctl restart catt
+```
 
 ```bash
 curl -X POST http://localhost:5000/catt \
@@ -57,17 +66,20 @@ Cloudflare Worker. Requires three secrets set via `wrangler secret put`:
 
 | Secret | Description |
 |---|---|
-| `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
-| `YOUTUBE_API_KEY` | YouTube Data API v3 key (for playlist shuffle) |
-| `TELEGRAM_SECRET_TOKEN` | Validates incoming Telegram webhook requests |
 | `CATT_API_KEY` | Shared secret required on all non-Google routes via `X-API-Key` header; if unset, auth is skipped |
+| `CATT_SERVER_SECRET` | Shared secret sent to catt_server via `X-Catt-Secret` header; catt_server reads from `CATT_SERVER_SECRET` env var |
+| `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
+| `TELEGRAM_SECRET_TOKEN` | Validates incoming Telegram webhook requests |
+| `YOUTUBE_API_KEY` | YouTube Data API v3 key (for playlist shuffle) |
 
 ```bash
 cd catt_bff
 npm install
+wrangler secret put CATT_API_KEY
+wrangler secret put CATT_SERVER_SECRET
 wrangler secret put CATT_SERVER_URL
-wrangler secret put YOUTUBE_API_KEY
 wrangler secret put TELEGRAM_SECRET_TOKEN
+wrangler secret put YOUTUBE_API_KEY
 wrangler deploy
 ```
 
@@ -80,7 +92,7 @@ wrangler deploy
 | `/device/box/*` | Device queue controls (cast, stop, prev, next, state, shuffle, site, set) |
 | `POST /slack` | Slack slash command webhook |
 | `POST /telegram` | Telegram bot webhook |
-| `POST /catt` | Ad-hoc POST endpoint — `cast` (immediate or `device: "queue"` to enqueue) and `site` commands with optional device override |
+| `POST /catt` | Ad-hoc POST endpoint — `cast`, `site`, `play`, `stop`, `prev`, `next` commands with optional device override |
 | `GET /echo` | TTS HTML renderer (for cast_site on TV devices) |
 | `GET /gsync` | Debug: returns SYNC response without going through Google (pretty-printed JSON) |
 | `GET /gquery` | Debug: returns live QUERY state without going through Google (pretty-printed JSON) |
@@ -140,7 +152,7 @@ curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API
 
 | Path | Effect |
 |---|---|
-| `/device/box/state` | Returns current state as pretty-printed JSON (now, device, app, volume, prev, next, playlist, tts, alarm, queue) |
+| `/device/box/state` | Returns current state as pretty-printed JSON (now, device, channel, app, volume, prev, next, playlist, tts, alarm, queue) |
 | `/device/box/play` | Toggle play/pause |
 | `/device/box/prev` | Play previous (replays last TTS if `prev=tts`, plays pingr2 if no history) |
 | `/device/box/next` | Advance queue; casts ping if queue empty |

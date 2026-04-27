@@ -24,12 +24,12 @@ async function dispatchCommand(
     return "tts";
   }
   if (command === "volume") {
-    await castCommand(env.CATT_SERVER_URL, resolveDevice(device), "volume", Number(rawValue));
+    await castCommand(env.CATT_SERVER_URL, resolveDevice(device), "volume", Number(rawValue), undefined, env.CATT_SERVER_SECRET);
     return "volume";
   }
   await castCommand(env.CATT_SERVER_URL, resolveDevice(device), "cast", resolveValue(rawValue), {
     force_default: true,
-  });
+  }, env.CATT_SERVER_SECRET);
   return "cast";
 }
 

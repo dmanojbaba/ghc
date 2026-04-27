@@ -33,7 +33,19 @@ def mock_cast():
 
 ---
 
-## 1. Request Validation
+## 1. Authentication
+
+| # | Test | Scenario | Expected |
+|---|---|---|---|
+| 1.1 | Secret set, correct header | `CATT_SERVER_SECRET=abc`, `X-Catt-Secret: abc` | Request proceeds normally |
+| 1.2 | Secret set, wrong header | `CATT_SERVER_SECRET=abc`, `X-Catt-Secret: wrong` | 401, `error_type: Unauthorized` |
+| 1.3 | Secret set, missing header | `CATT_SERVER_SECRET=abc`, no header | 401, `error_type: Unauthorized` |
+| 1.4 | Secret unset, no header | `CATT_SERVER_SECRET` not set | Request proceeds normally (dev mode) |
+
+---
+
+## 2. Request Validation
+
 
 | # | Test | Input | Expected |
 |---|---|---|---|

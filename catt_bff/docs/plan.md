@@ -11,7 +11,7 @@
 - **YouTube playlist shuffle** — fetches playlist items and queues them for sequential playback
 - **TTS** — renders text as an HTML page served via `cast_site` on TV devices, or calls `tts` command on others
 - **Slack & Telegram integration** — webhook endpoints that translate slash commands into `catt_server` calls
-- **Ad-hoc POST endpoint** — `POST /catt` for curl usage; supports `cast`, `site`, and `queue` commands with optional device override
+- **Ad-hoc POST endpoint** — `POST /catt` for curl usage; supports `cast`, `site`, `play`, `stop`, `prev`, `next` commands with optional device override
 
 Based on a working single-device prototype (`old_bff.py`) which used Cloudflare KV for state. The key architectural change is replacing KV with a **single Durable Object** (SQLite-backed) to support an ordered queue and DO Alarms for automatic advancement.
 
@@ -232,12 +232,12 @@ Resolution order for `getParsedUrl`:
 ## `catt.ts`
 
 ```typescript
-castCommand(serverUrl, device, command, value?, extra?): Promise<CattResponse>
-getStatus(serverUrl, device): Promise<CattStatusResponse>
-getInfo(serverUrl, device): Promise<CattInfoResponse>
+castCommand(serverUrl, device, command, value?, extra?, secret?): Promise<CattResponse>
+getStatus(serverUrl, device, secret?): Promise<CattStatusResponse>
+getInfo(serverUrl, device, secret?): Promise<CattInfoResponse>
 ```
 
-Posts to `POST /catt` on catt_server. `force_default` is passed as `extra` when needed by callers. `getInfo` returns `player_state`, `duration`, and `current_time` in one call — used by `alarm()` for smart scheduling. `getStatus` is used as a fallback when `getInfo` fails.
+Posts to `POST /catt` on catt_server. `force_default` is passed as `extra` when needed by callers. `secret` is sent as `X-Catt-Secret` header when provided. `getInfo` returns `player_state`, `duration`, and `current_time` in one call — used by `alarm()` for smart scheduling. `getStatus` is used as a fallback when `getInfo` fails.
 
 ---
 
@@ -408,6 +408,7 @@ crons = ["3 3 * * *"]   # 03:03 UTC daily — clear all device queues
 | Secret | Description |
 |---|---|
 | `CATT_API_KEY` | Shared secret required on all non-Google routes via `X-API-Key` header; if unset, auth is skipped (dev mode) |
+| `CATT_SERVER_SECRET` | Shared secret sent to catt_server via `X-Catt-Secret` header on every outbound call; if unset, header is omitted |
 | `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
 | `TELEGRAM_SECRET_TOKEN` | Validates incoming Telegram webhook requests |
 | `YOUTUBE_API_KEY` | Google YouTube Data API v3 key (for playlist fetching) |
@@ -435,9 +436,11 @@ ingress:
 ```bash
 cd catt_bff
 npm install
+wrangler secret put CATT_API_KEY
+wrangler secret put CATT_SERVER_SECRET
 wrangler secret put CATT_SERVER_URL
-wrangler secret put YOUTUBE_API_KEY
 wrangler secret put TELEGRAM_SECRET_TOKEN
+wrangler secret put YOUTUBE_API_KEY
 wrangler deploy
 ```
 

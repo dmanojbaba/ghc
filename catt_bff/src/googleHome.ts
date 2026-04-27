@@ -170,7 +170,7 @@ async function handleExecute(
           command === "action.devices.commands.mediaResume" ||
           command === "action.devices.commands.mediaPause"
         ) {
-          await castCommand(env.CATT_SERVER_URL, cattDevice, "play_toggle");
+          await castCommand(env.CATT_SERVER_URL, cattDevice, "play_toggle", undefined, undefined, env.CATT_SERVER_SECRET);
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaStop") {
@@ -184,16 +184,16 @@ async function handleExecute(
 
         } else if (command === "action.devices.commands.setVolume") {
           const volume = Number(params.volumeLevel ?? 5);
-          await castCommand(env.CATT_SERVER_URL, cattDevice, "volume", volume * 10);
+          await castCommand(env.CATT_SERVER_URL, cattDevice, "volume", volume * 10, undefined, env.CATT_SERVER_SECRET);
           await doGet(stub, "/set/volume/" + volume);
           result = { status: "SUCCESS", states: { online: true, currentVolume: volume } };
 
         } else if (command === "action.devices.commands.volumeRelative") {
           const steps = Number(params.relativeSteps ?? 0);
           if (steps > 0) {
-            await castCommand(env.CATT_SERVER_URL, cattDevice, "volumeup", steps * 10);
+            await castCommand(env.CATT_SERVER_URL, cattDevice, "volumeup", steps * 10, undefined, env.CATT_SERVER_SECRET);
           } else if (steps < 0) {
-            await castCommand(env.CATT_SERVER_URL, cattDevice, "volumedown", Math.abs(steps) * 10);
+            await castCommand(env.CATT_SERVER_URL, cattDevice, "volumedown", Math.abs(steps) * 10, undefined, env.CATT_SERVER_SECRET);
           }
           result = { status: "SUCCESS", states: { online: true } };
 

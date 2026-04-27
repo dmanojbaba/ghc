@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from threading import Thread
 from uuid import UUID
@@ -236,6 +237,10 @@ class _ValidationError(Exception):
 
 @app.route("/catt", methods=["POST"])
 def handle_catt():
+    secret = os.environ.get("CATT_SERVER_SECRET")
+    if secret and request.headers.get("X-Catt-Secret") != secret:
+        return _err("Unauthorized", "Unauthorized", 401)
+
     body = request.get_json(silent=True)
     if body is None:
         return _err("Request body must be valid JSON", "ValidationError", 400)

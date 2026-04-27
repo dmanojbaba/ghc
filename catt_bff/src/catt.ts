@@ -27,12 +27,19 @@ export interface CattInfoResponse {
   };
 }
 
+function cattHeaders(secret?: string): Record<string, string> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (secret) headers["X-Catt-Secret"] = secret;
+  return headers;
+}
+
 export async function castCommand(
   serverUrl: string,
   device: string,
   command: string,
   value?: unknown,
   extra?: Record<string, unknown>,
+  secret?: string,
 ): Promise<CattResponse> {
   const body: Record<string, unknown> = { device, command };
   if (value !== undefined) body.value = value;
@@ -40,7 +47,7 @@ export async function castCommand(
 
   const res = await fetch(serverUrl.replace(/\/$/, "") + "/catt", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: cattHeaders(secret),
     body: JSON.stringify(body),
   });
 
@@ -48,10 +55,10 @@ export async function castCommand(
   return res.json() as Promise<CattResponse>;
 }
 
-export async function getStatus(serverUrl: string, device: string): Promise<CattStatusResponse> {
+export async function getStatus(serverUrl: string, device: string, secret?: string): Promise<CattStatusResponse> {
   const res = await fetch(serverUrl.replace(/\/$/, "") + "/catt", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: cattHeaders(secret),
     body: JSON.stringify({ device, command: "status" }),
   });
 
@@ -59,10 +66,10 @@ export async function getStatus(serverUrl: string, device: string): Promise<Catt
   return res.json() as Promise<CattStatusResponse>;
 }
 
-export async function getInfo(serverUrl: string, device: string): Promise<CattInfoResponse> {
+export async function getInfo(serverUrl: string, device: string, secret?: string): Promise<CattInfoResponse> {
   const res = await fetch(serverUrl.replace(/\/$/, "") + "/catt", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: cattHeaders(secret),
     body: JSON.stringify({ device, command: "info" }),
   });
 

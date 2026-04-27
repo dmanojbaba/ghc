@@ -155,9 +155,13 @@ Structure:
 - `_serialisable(obj)` — recursively converts UUID/datetime/date to strings
 - One handler function per command (15 total, registered in `ACTION_HANDLERS`)
 - `ThreadPoolExecutor` with 4 workers — handlers run off the request thread for timeout support
-- `POST /catt` — dispatches to handler via executor, wraps errors into structured JSON
+- `POST /catt` — checks `X-Catt-Secret` header against `CATT_SERVER_SECRET` env var (skipped if unset); dispatches to handler via executor, wraps errors into structured JSON
 - `main()` with argparse for `--host`, `--port`, `--timeout` (default 30s), `--debug`
 - Structured logging via `logging.basicConfig` — INFO on request received (logs full JSON body including `command`, `device`, `value`), INFO on success, WARNING on client errors, ERROR/EXCEPTION on server errors
+
+### Authentication
+
+`CATT_SERVER_SECRET` env var — if set, every request to `POST /catt` must include an `X-Catt-Secret` header with a matching value. Requests with a missing or incorrect header are rejected with 401. If the env var is unset, auth is skipped (dev mode).
 
 ### Constants
 
@@ -172,8 +176,10 @@ Structure:
 docker build -t catt-api ./catt_server
 
 # Run (host networking required for mDNS Chromecast discovery)
-docker run --network host catt-api
+docker run --network host -e CATT_SERVER_SECRET=your-secret catt-api
 ```
+
+`CATT_SERVER_SECRET` is optional — if omitted, auth is skipped.
 
 > **Important**: Chromecast discovery uses mDNS (multicast DNS), which does not work with Docker's default bridge networking. `--network host` is required so the container can see Chromecast devices on the LAN.
 
@@ -182,11 +188,12 @@ docker run --network host catt-api
 ```bash
 # Build and start
 docker build -t catt-api ./catt_server
-docker run --network host catt-api
+docker run --network host -e CATT_SERVER_SECRET=your-secret catt-api
 
 # Test volume
 curl -X POST http://localhost:5000/catt \
   -H 'Content-Type: application/json' \
+  -H 'X-Catt-Secret: your-secret' \
   -d '{"device": "<name>", "command": "volume", "value": 50}'
 
 # Test cast
