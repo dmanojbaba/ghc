@@ -159,7 +159,6 @@ STOPPED ──(enqueue when idle)──► PLAYING
 |---|---|
 | `enqueue(url, title?)` | Add to queue; if `now == stopped`, call `advance()` immediately |
 | `advance()` | Pop next from queue; if empty, play ping sentinel + set `now=stopped`; else cast, set `now=playing`, set alarm in 10s (settle) |
-| `skip()` | Stop catt_server, then `advance()` |
 | `clear()` | Stop catt_server, cancel alarm, clear queue, reset `now`, `prev`, `next`, `tts` to defaults (preserves `app`, `device`, `playlist`) |
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item, load rest into queue, set alarm in 10s (settle) |
 | `playPrev()` | Cast `prev` URL, set `now=playing`, schedule alarm |
@@ -175,7 +174,7 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 | `GET` | `/device/box/state` | Return `getState()` as JSON |
 | `GET` | `/device/box/play` | `play_toggle` on catt_server |
 | `GET` | `/device/box/prev` | `playPrev()` |
-| `GET` | `/device/box/next` | `skip()` |
+| `GET` | `/device/box/next` | `advance()` |
 | `GET` | `/device/box/stop` | `clear()` |
 | `GET` | `/device/box/clear` | Clear queue + reset `now`, keep other state |
 | `GET/POST` | `/device/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
@@ -243,8 +242,8 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 
 | Google Command | Action |
 |---|---|
-| `OnOff` (on) | Call `/box/stop` (clears queue + alarm), then set `app=youtube`, `device=otv` |
-| `OnOff` (off) | Call `/box/stop` (clears queue + alarm), then set `app=default` |
+| `OnOff` (on) | Call `/box/clear` (clears queue + alarm, no catt_server call), then set `app=youtube`, `device=otv` |
+| `OnOff` (off) | Call `/box/clear` (clears queue + alarm, no catt_server call), then set `app=default` |
 | `SetModes` | Update `app` state in DO |
 | `SetInput` | Update `device` state in DO |
 | `selectChannel` | Cast channel URL, update `prev` |
@@ -252,7 +251,7 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 | `returnChannel` | `playPrev()` |
 | `mediaShuffle` | `shuffle()` using saved `playlist` state key |
 | `mediaPrevious` | `playPrev()` |
-| `mediaNext` | `skip()` |
+| `mediaNext` | `advance()` |
 | `mediaResume` / `mediaPause` | `play_toggle` on catt_server |
 | `mediaStop` | `clear()` |
 | `appSelect` | Update `app` state in DO |
@@ -375,7 +374,7 @@ The `mediaShuffle` EXECUTE intent will read this value and populate the queue.
 | Cloudflare KV for state | Durable Object SQLite (`kv` table) |
 | Single active device | Per-input device resolution via `INPUT_TO_DEVICE` |
 | Queue as KV pipe-separated string | SQLite `queue` table with autoincrement |
-| Manual next only | Auto-advance via DO Alarms + smart `getInfo`-based scheduling |
+| Manual next only | Auto-advance via DO Alarms + smart `getInfo`-based scheduling; `next` uses `advance()` directly (no stop) |
 | No Report State | State reported reactively via QUERY intent only |
 | Random 8-char token, no expiry | Random 32-char token (CSPRNG), `expires_in: 86400`, no `refresh_token` |
 | `/gauth`, `/gtoken`, `/gexec`, `/gcatt`, etc. | `/oauth/auth`, `/oauth/token`, `/fulfillment`, `/device/:name/*` |

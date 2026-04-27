@@ -105,12 +105,6 @@ export class DeviceQueue implements DurableObject {
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
   }
 
-  async skip(): Promise<void> {
-    const device = this.resolveDevice(this.get("device"));
-    await castCommand(this.serverUrl, device, "stop");
-    await this.advance();
-  }
-
   async clear(): Promise<void> {
     const device = this.resolveDevice(this.get("device"));
     await castCommand(this.serverUrl, device, "stop");
@@ -124,7 +118,6 @@ export class DeviceQueue implements DurableObject {
 
   async shuffle(playlistId: string): Promise<void> {
     const device = this.resolveDevice(this.get("device"));
-    await castCommand(this.serverUrl, device, "stop");
     let first: string;
     let rest: string[];
     try {
@@ -231,7 +224,7 @@ export class DeviceQueue implements DurableObject {
         return new Response("ok");
 
       case "next":
-        await this.skip();
+        await this.advance();
         return new Response("ok");
 
       case "play": {
