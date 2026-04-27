@@ -1,0 +1,23 @@
+[Unit]
+Description=cloudflared
+Requires=docker.service network-online.target
+
+[Service]
+Restart=always
+
+WorkingDirectory=/home/pi/dotfiles/cloudflared
+EnvironmentFile=/home/pi/dotfiles/cloudflared/.env
+
+ExecStartPre=-/usr/bin/docker stop cloudflared
+ExecStartPre=-/usr/bin/docker rm cloudflared
+
+ExecStart=/usr/bin/docker run --rm \
+	--name cloudflared \
+	--network host \
+	-e CLOUDFLARED_TOKEN \
+	cloudflare/cloudflared:latest tunnel --no-autoupdate run --token $CLOUDFLARED_TOKEN
+
+ExecStop=/usr/bin/docker stop cloudflared
+
+[Install]
+WantedBy=multi-user.target
