@@ -234,7 +234,7 @@ async function searchYoutube(
     return returnString;
   } else if (searchText.trim().includes(" ") == false) {
     let requestByID = `https://www.googleapis.com/youtube/v3/videos?part=snippet&key=${
-      env.API_KEY
+      env.YOUTUBE_API_KEY
     }&id=${encodeURIComponent(searchText)}${extraParams}`;
     const responseByID = await fetch(requestByID);
     const dataByID = await responseByID.json();
@@ -266,7 +266,7 @@ async function searchYoutube(
     }
   } else {
     let requestUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&key=${
-      env.API_KEY
+      env.YOUTUBE_API_KEY
     }&q=${encodeURIComponent(searchText)}${extraParams}`;
     const response = await fetch(requestUrl);
     const data = await response.json();

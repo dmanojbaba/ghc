@@ -1,9 +1,10 @@
 # catt
 
-Control Chromecast devices over HTTP. Two components:
+Control Chromecast devices over HTTP. Three components:
 
 - **`catt_server`** — Flask REST API that wraps the [`catt`](https://github.com/skorokithakis/catt) CLI. Runs on the LAN inside Docker, exposed externally via Cloudflare Tunnel.
 - **`catt_bff`** — Cloudflare Worker that sits in front of `catt_server`, adding per-device play queues, Google Home integration, Slack/Telegram webhooks, and an ad-hoc `POST /catt` endpoint for curl usage.
+- **`redirect`** — Cloudflare Worker for URL shortening and YouTube search. Deployed at `r.manojbaba.com`.
 
 ## Architecture
 
@@ -163,12 +164,51 @@ curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API
 | `/device/box/shuffle` | Shuffle saved playlist |
 | `/device/box/set/:key/:value` | Set state key (e.g. `device`, `app`, `playlist`, `volume`) |
 
+## redirect
+
+Cloudflare Worker (`src/index.js`). URL shortener and redirect service deployed at `r.manojbaba.com`.
+
+```bash
+cd redirect
+npm install
+npm run start   # wrangler dev (local)
+npm run deploy  # wrangler deploy
+```
+
+### Routes (GET)
+
+| Path | Behaviour |
+|---|---|
+| `/ip` | Returns the caller's IP (`CF-Connecting-IP`) |
+| `/kv` | Lists all KV keys |
+| `/kv/<key>` | Returns KV value for key (add `?output=json` for JSON) |
+| `/r/<key>` | Redirects to KV value; if key not found, falls back to YouTube search |
+| `/r2/<key>` | Streams file from R2 bucket `md24` |
+| `/y/<key>` | Returns raw YouTube search result as JSON |
+
+### Routes (POST)
+
+| Path | Behaviour |
+|---|---|
+| `/_raw` | Echoes request body |
+| `/kv` | Returns KV value for key from JSON body (`{text: "<key>"}`) |
+
+### Scheduled jobs (cron)
+
+- **`0 6-22 * * *`** (hourly, 6am–10pm): Searches YouTube for latest Puthiyathalaimurai and Sun News headlines and updates `pttv` and `sun` KV keys.
+- **`3 3 * * *`** (3:03am daily): No-op placeholder.
+
+```bash
+wrangler secret put YOUTUBE_API_KEY
+```
+
 ## CI/CD
 
 | Workflow | Trigger | Actions |
 |---|---|---|
 | `catt-server` | PR / push to main / manual | PR: run tests + build image. Merge: run tests + build + push to Docker Hub. |
 | `catt-bff` | PR / push to main / manual | PR: run tests + wrangler dry-run. Merge/manual: run tests + deploy. |
+| `redirect` | PR / push to main / manual | PR: wrangler dry-run. Merge/manual: deploy. |
 
 ### Required secrets
 
@@ -176,4 +216,4 @@ curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API
 |---|---|
 | `DOCKERHUB_USERNAME` | catt-server workflow |
 | `DOCKERHUB_TOKEN` | catt-server workflow |
-| `CLOUDFLARE_API_TOKEN` | catt-bff workflow |
+| `CLOUDFLARE_API_TOKEN` | catt-bff, redirect workflows |
