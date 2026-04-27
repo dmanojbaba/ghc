@@ -254,7 +254,10 @@ export class DeviceQueue implements DurableObject {
 
       case "clear":
         this.sql.exec("DELETE FROM queue");
-        this.set("now", DEFAULT_NOW);
+        this.set("now",  DEFAULT_NOW);
+        this.set("prev", DEFAULT_PREV);
+        this.set("next", DEFAULT_NEXT);
+        this.set("tts",  DEFAULT_TTS);
         await this.state.storage.deleteAlarm();
         return new Response("ok");
 

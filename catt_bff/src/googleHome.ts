@@ -106,8 +106,7 @@ async function handleExecute(
             await doGet(stub, "/set/app/youtube");
             await doGet(stub, "/set/device/" + DEFAULT_DEVICE);
           } else {
-            await doGet(stub, "/clear");
-            await doGet(stub, "/set/app/" + DEFAULT_APP);
+            await doGet(stub, "/stop");
           }
           result = { status: "SUCCESS", states: { on: params.on, online: true, playbackState: "STOPPED" } };
 
