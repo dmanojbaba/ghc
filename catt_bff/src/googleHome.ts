@@ -1,4 +1,5 @@
 import { castCommand } from "./catt";
+import { getParsedUrl } from "./urlHelper";
 import {
   DEVICES, DEVICE_ID, INPUT_TO_DEVICE,
   DEFAULT_APP, DEFAULT_DEVICE, DEFAULT_VOLUME,
@@ -125,17 +126,12 @@ async function handleExecute(
           const channelCode = String(
             params.channelCode ?? getChannelCode(DEVICE_ID, String(params.channelNumber)) ?? "",
           );
-          await doGet(stub, "/set/prev/" + channelCode);
-          await castCommand(env.CATT_SERVER_URL, cattDevice, "cast", channelCode, {
-            force_default: doSt.app === DEFAULT_APP,
-          });
+          await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode)));
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.relativeChannel") {
           const channelCode = String(params.relativeChannelChange) === "-1" ? "pttv" : "sun";
-          await castCommand(env.CATT_SERVER_URL, cattDevice, "cast", channelCode, {
-            force_default: doSt.app === DEFAULT_APP,
-          });
+          await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode)));
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaShuffle") {
