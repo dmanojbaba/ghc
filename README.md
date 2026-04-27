@@ -3,7 +3,7 @@
 Control Chromecast devices over HTTP. Two components:
 
 - **`catt_server`** — Flask REST API that wraps the [`catt`](https://github.com/skorokithakis/catt) CLI. Runs on the LAN inside Docker, exposed externally via Cloudflare Tunnel.
-- **`catt_bff`** — Cloudflare Worker that sits in front of `catt_server`, adding per-device play queues, Google Home integration, and Slack/Telegram webhooks.
+- **`catt_bff`** — Cloudflare Worker that sits in front of `catt_server`, adding per-device play queues, Google Home integration, Slack/Telegram webhooks, and an ad-hoc `POST /catt` endpoint for curl usage.
 
 ## Architecture
 
@@ -76,9 +76,10 @@ wrangler deploy
 |---|---|
 | `POST /fulfillment` | Google Home Cloud-to-Cloud intents |
 | `GET /oauth/auth`, `POST /oauth/token` | Google account linking stub |
-| `/device/box/*` | Device queue controls (cast, skip, stop, state, shuffle) |
+| `/device/box/*` | Device queue controls (cast, stop, prev, next, state, shuffle, site, set) |
 | `POST /slack` | Slack slash command webhook |
 | `POST /telegram` | Telegram bot webhook |
+| `POST /catt` | Ad-hoc POST endpoint — `cast` (immediate or `device: "queue"` to enqueue) and `site` commands with optional device override |
 | `GET /echo` | TTS HTML renderer (for cast_site on TV devices) |
 | `GET /gsync` | Debug: returns SYNC response without going through Google (pretty-printed JSON) |
 | `GET /gquery` | Debug: returns live QUERY state without going through Google (pretty-printed JSON) |

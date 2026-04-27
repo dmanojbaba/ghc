@@ -2,6 +2,7 @@ import { DeviceQueue } from "./DeviceQueue";
 import { handleFulfillment, handleSync, handleQuery } from "./googleHome";
 import { handleOAuthAuth, handleOAuthToken } from "./oauth";
 import { handleSlack, handleTelegram } from "./integrations";
+import { handleCatt } from "./cattHandler";
 import { DEVICE_ID } from "./devices";
 
 export { DeviceQueue };
@@ -47,6 +48,11 @@ export default {
     }
     if (path === "/oauth/token" && method === "POST") {
       return handleOAuthToken();
+    }
+
+    // Ad-hoc POST endpoint
+    if (path === "/catt" && method === "POST") {
+      return handleCatt(request, env, getDoStub(env, DEVICE_ID));
     }
 
     // Slack

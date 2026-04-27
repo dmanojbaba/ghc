@@ -2,7 +2,7 @@ import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems, getParsedUrl } from "./urlHelper";
 import {
   DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_NOW, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME,
-  INPUT_TO_DEVICE, isAudioOnlyInput,
+  INPUT_TO_DEVICE, isAudioOnlyInput, getInputKey, DEVICE_ID,
 } from "./devices";
 
 const POLL_INTERVAL_MS   = 10_000;
@@ -288,6 +288,60 @@ export class DeviceQueue implements DurableObject {
             await castCommand(this.serverUrl, device, "tts", rawArg);
           }
         }
+        return new Response("ok");
+      }
+
+      case "catt": {
+        const body = await request.json() as { command: string; value?: string; device?: string };
+        const cmd        = body.command;
+        const val        = body.value ?? "";
+        const deviceArg  = body.device ?? "";
+
+        if (deviceArg && deviceArg !== "queue") {
+          const key = getInputKey(DEVICE_ID, deviceArg, null) ?? deviceArg;
+          this.set("device", key);
+          if (isAudioOnlyInput(DEVICE_ID, key)) this.set("app", DEFAULT_APP);
+        }
+
+        const device = this.resolveDevice(this.get("device"));
+
+        if (cmd === "cast") {
+          const parsedUrl = getParsedUrl(val);
+          if (deviceArg === "queue") {
+            await this.enqueue(parsedUrl);
+          } else {
+            this.sql.exec("DELETE FROM queue");
+            await this.state.storage.deleteAlarm();
+            await castCommand(this.serverUrl, device, "cast", parsedUrl, {
+              force_default: this.forceDefault(),
+            });
+            this.set("prev", parsedUrl);
+            this.set("now", "playing");
+            await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
+          }
+
+        } else if (cmd === "site") {
+          await castCommand(this.serverUrl, device, "stop");
+          this.sql.exec("DELETE FROM queue");
+          await this.state.storage.deleteAlarm();
+          this.set("now", DEFAULT_NOW);
+          if (val.startsWith("http")) {
+            await castCommand(this.serverUrl, device, "cast_site", val);
+          } else {
+            this.set("tts", val);
+            if (device.toLowerCase().includes("tv")) {
+              const echoUrl = `https://${new URL(request.url).host}/echo`;
+              await castCommand(this.serverUrl, device, "cast_site", echoUrl);
+            } else {
+              this.set("prev", "tts");
+              await castCommand(this.serverUrl, device, "tts", val);
+            }
+          }
+
+        } else {
+          return new Response("unknown command", { status: 400 });
+        }
+
         return new Response("ok");
       }
 

@@ -11,6 +11,7 @@
 - **YouTube playlist shuffle** — fetches playlist items and queues them for sequential playback
 - **TTS** — renders text as an HTML page served via `cast_site` on TV devices, or calls `tts` command on others
 - **Slack & Telegram integration** — webhook endpoints that translate slash commands into `catt_server` calls
+- **Ad-hoc POST endpoint** — `POST /catt` for curl usage; supports `cast`, `site`, and `queue` commands with optional device override
 
 Based on a working single-device prototype (`old_bff.py`) which used Cloudflare KV for state. The key architectural change is replacing KV with a **single Durable Object** (SQLite-backed) to support an ordered queue and DO Alarms for automatic advancement.
 
@@ -34,7 +35,8 @@ Cloudflare Worker (catt_bff)  — <your-worker-domain>
    │     ├── SQLite: queue + kv tables
    │     └── Alarm: polls catt_server + advances queue
    ├── POST /slack              → integrations.ts
-   └── POST /telegram           → integrations.ts
+   ├── POST /telegram           → integrations.ts
+   └── POST /catt               → cattHandler.ts (ad-hoc POST endpoint)
 ```
 
 ---
@@ -49,6 +51,7 @@ catt_bff/
 │   ├── catt.ts               # catt_server HTTP client
 │   ├── googleHome.ts         # SYNC / QUERY / EXECUTE handlers
 │   ├── integrations.ts       # Slack & Telegram webhook handlers
+│   ├── cattHandler.ts        # Ad-hoc POST endpoint handler
 │   ├── oauth.ts              # OAuth 2.0 stub (single user, random tokens)
 │   ├── urlHelper.ts          # YouTube URL normalisation + playlist fetcher
 │   ├── devices.ts            # Device definitions, input map, helpers
@@ -159,10 +162,10 @@ STOPPED ──(enqueue when idle)──► PLAYING
 | Method | Behaviour |
 |---|---|
 | `enqueue(url, title?)` | Add to queue; if `now == stopped`, call `advance()` immediately |
-| `advance()` | Pop next from queue; if empty, cast ping sentinel (URL-resolved via `getParsedUrl`) + set `now=stopped`; else cast item URL, set `now=playing`, set alarm in 10s (settle) |
+| `advance(userInitiated?)` | Pop next from queue; if empty + `userInitiated=true` → cast `DEFAULT_NEXT` (ping), set `now=stopped`, cancel alarm; if empty + not user-initiated → set `now=stopped`, cancel alarm, nothing cast; else cast item URL, set `now=playing`, set alarm in 10s (settle) |
 | `clear()` | Stop catt_server, cancel alarm, clear queue, reset `now`, `prev`, `next`, `tts` to defaults (preserves `app`, `device`, `playlist`) |
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 10s (settle) |
-| `playPrev()` | Cast `prev` URL (URL-resolved via `getParsedUrl`), set `now=playing`, schedule alarm |
+| `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `now=playing`, schedule alarm |
 | `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration → 10s poll; if `getInfo` fails → `getStatus` fallback |
 | `getState()` | Return current state dict (alarm, now, device, app, volume, prev, next, playlist, tts, queue array) — `alarm` is ISO timestamp of next scheduled alarm or `null` |
 
@@ -291,6 +294,58 @@ Returns `{}`.
 
 ---
 
+## `cattHandler.ts` — Ad-hoc POST Endpoint
+
+Single endpoint for ad-hoc curl usage.
+
+| Method | Path | Behaviour |
+|---|---|---|
+| `POST` | `/catt` | Dispatch `cast`, `site`, or `queue` command to the DeviceQueue DO |
+
+### Request body
+
+```json
+{"command": "cast|site|queue", "value": "...", "device": "o"}
+```
+
+`device` is optional — if provided, resolves via `getInputKey`, updates stored device, auto-resets `app` to `default` if audio-only.
+
+### Commands
+
+| `command` | `device` | `value` | Behaviour |
+|---|---|---|---|
+| `cast` | input key or name | URL or redirect key | Clear queue + cancel alarm, cast immediately, update `prev`, schedule alarm |
+| `cast` | `queue` | URL or redirect key | Enqueue via `getParsedUrl`; plays immediately if idle, appends otherwise |
+| `site` | input key, name, or `queue` (uses stored device) | URL → `cast_site`; plain text → TTS (HTML on TV, spoken on audio device) | Stop + clear queue + cancel alarm |
+
+`device` accepts aliases (`k`, `o`, `otv`) or full names (`Mini Kitchen`, `Office TV`). `"queue"` is a special value for `cast` that enqueues instead of casting immediately; for `site` it is ignored and the stored device is used.
+
+### Examples
+
+```bash
+# Cast immediately
+curl -X POST https://<worker>/catt \
+  -H 'Content-Type: application/json' \
+  -d '{"command": "cast", "device": "o", "value": "https://youtube.com/watch?v=..."}'
+
+# Add to queue
+curl -X POST https://<worker>/catt \
+  -H 'Content-Type: application/json' \
+  -d '{"command": "cast", "device": "queue", "value": "https://youtube.com/watch?v=..."}'
+
+# TTS on TV
+curl -X POST https://<worker>/catt \
+  -H 'Content-Type: application/json' \
+  -d '{"command": "site", "device": "tv", "value": "Hello World"}'
+
+# Cast site on TV
+curl -X POST https://<worker>/catt \
+  -H 'Content-Type: application/json' \
+  -d '{"command": "site", "device": "tv", "value": "https://example.com"}'
+```
+
+---
+
 ## `/echo` — TTS HTML Renderer
 
 Accepts `GET ?text=...` or `POST` (JSON or form). Returns an HTML page with the text in a centred `<h1>` — cast via `cast_site` to display on TV devices.
@@ -381,6 +436,7 @@ The `mediaShuffle` EXECUTE intent will read this value and populate the queue.
 | `/gauth`, `/gtoken`, `/gexec`, `/gcatt`, etc. | `/oauth/auth`, `/oauth/token`, `/fulfillment`, `/device/:name/*` |
 | `mediaShuffle` reads `catt` KV key | `mediaShuffle` reads `playlist` kv state key; no prior `stop` — cast preempts playback |
 | No Slack/Telegram | `/slack`, `/telegram` — unified endpoints supporting `cast`, `volume`, `play`, `stop`, `prev`, `next`, `tts` |
+| `/gcatt` — general-purpose GET/POST endpoint | `POST /catt` — clean POST-only endpoint with `cast`, `site`, `queue` commands and optional device override |
 | No audio-only device awareness | Switching input to a Mini device (name starts with "mini") auto-resets `app` to `default` |
 | `prev`/`next` sentinel keys sent raw to catt_server | Bare redirect keys (`pingr2`, `ping`) resolved via `getParsedUrl` before sending to catt_server |
 | `OnOff` calls `stop` on catt_server | `OnOff` uses `/clear` — resets queue state only, no catt_server call |
