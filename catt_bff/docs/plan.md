@@ -247,7 +247,7 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 | Google Command | Action |
 |---|---|
 | `OnOff` (on) | Call `/box/clear` (clears queue + alarm, no catt_server call), then set `app=youtube`, `device=otv` |
-| `OnOff` (off) | Call `/box/clear` (clears queue + alarm, no catt_server call), then set `app=default` |
+| `OnOff` (off) | Call `/box/stop` (stops catt_server + clears queue + alarm); `app` and `device` left unchanged |
 | `SetModes` | Update `app` state in DO |
 | `SetInput` | Update `device` state in DO |
 | `selectChannel` | Enqueue channel URL via DO (`/cast/:url`) — URL resolved via `getParsedUrl` |
@@ -260,6 +260,7 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 | `mediaStop` | `clear()` |
 | `appSelect` | Update `app` state in DO |
 | `setVolume` | `volume` on catt_server (Google 0–10 × 10 → catt 0–100) |
+| `volumeRelative` | `volumeup` or `volumedown` on catt_server (steps × 10%); no stored volume needed |
 
 ### DISCONNECT
 Returns `{}`.
@@ -439,7 +440,9 @@ The `mediaShuffle` EXECUTE intent will read this value and populate the queue.
 | `/gcatt` — general-purpose GET/POST endpoint | `POST /catt` — clean POST-only endpoint with `cast`, `site`, `queue` commands and optional device override |
 | No audio-only device awareness | Switching input to a Mini device (name starts with "mini") auto-resets `app` to `default` |
 | `prev`/`next` sentinel keys sent raw to catt_server | Bare redirect keys (`pingr2`, `ping`) resolved via `getParsedUrl` before sending to catt_server |
-| `OnOff` calls `stop` on catt_server | `OnOff` uses `/clear` — resets queue state only, no catt_server call |
+| `OnOff` on calls `stop` on catt_server | `OnOff` on uses `/clear` — resets queue state only, no catt_server call |
+| `OnOff` off resets `app` to `default` | `OnOff` off leaves `app` unchanged |
+| No `volumeRelative` support | `volumeRelative` maps to `volumeup`/`volumedown` — no stored volume needed |
 
 ## Constraints and Trade-offs
 

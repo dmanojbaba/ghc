@@ -191,6 +191,9 @@ export class DeviceQueue implements DurableObject {
       try {
         const statusRes = await getStatus(this.serverUrl, device);
         const state     = statusRes.data?.player_state ?? "UNKNOWN";
+        if (statusRes.data?.volume_level !== undefined) {
+          this.set("volume", String(Math.round(statusRes.data.volume_level * 100)));
+        }
         if (state === "IDLE" || state === "UNKNOWN") {
           await this.advance();
           return;

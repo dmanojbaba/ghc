@@ -171,6 +171,15 @@ async function handleExecute(
           await doGet(stub, "/set/volume/" + volume);
           result = { status: "SUCCESS", states: { online: true, currentVolume: volume } };
 
+        } else if (command === "action.devices.commands.volumeRelative") {
+          const steps = Number(params.relativeSteps ?? 0);
+          if (steps > 0) {
+            await castCommand(env.CATT_SERVER_URL, cattDevice, "volumeup", steps * 10);
+          } else if (steps < 0) {
+            await castCommand(env.CATT_SERVER_URL, cattDevice, "volumedown", Math.abs(steps) * 10);
+          }
+          result = { status: "SUCCESS", states: { online: true } };
+
         } else {
           result = { status: "SUCCESS", states: { online: true } };
         }
