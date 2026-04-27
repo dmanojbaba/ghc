@@ -249,7 +249,7 @@ def handle_catt():
         return _err("Unknown command: {}".format(command), "ValidationError", 400)
 
     cmd = command.lower()
-    logger.info("command=%s device=%s", cmd, body.get("device"))
+    logger.info("command=%s device=%s body=%s", cmd, body.get("device"), body)
 
     def run_in_context():
         with app.app_context():

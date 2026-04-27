@@ -1,5 +1,5 @@
 import { castCommand, getStatus, getInfo } from "./catt";
-import { getPlaylistItems } from "./urlHelper";
+import { getPlaylistItems, getParsedUrl } from "./urlHelper";
 import {
   DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_NOW, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME,
   INPUT_TO_DEVICE, isAudioOnlyInput,
@@ -82,12 +82,12 @@ export class DeviceQueue implements DurableObject {
       .exec<{ position: number; url: string; title: string | null }>(
         "SELECT position, url, title FROM queue ORDER BY position ASC LIMIT 1",
       )
-      .one();
+      .toArray()[0];
 
     if (!row) {
       // queue empty — play ping sentinel and mark stopped
       const device = this.resolveDevice(this.get("device"));
-      await castCommand(this.serverUrl, device, "cast", DEFAULT_NEXT, {
+      await castCommand(this.serverUrl, device, "cast", getParsedUrl(DEFAULT_NEXT), {
         force_default: this.forceDefault(),
       });
       this.set("now", DEFAULT_NOW);
@@ -141,7 +141,7 @@ export class DeviceQueue implements DurableObject {
   }
 
   async playPrev(): Promise<void> {
-    const prev   = this.get("prev");
+    const prev   = getParsedUrl(this.get("prev"));
     const device = this.resolveDevice(this.get("device"));
     await castCommand(this.serverUrl, device, "cast", prev, {
       force_default: this.forceDefault(),

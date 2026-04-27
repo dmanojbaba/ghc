@@ -80,8 +80,8 @@ wrangler deploy
 | `POST /slack` | Slack slash command webhook |
 | `POST /telegram` | Telegram bot webhook |
 | `GET /echo` | TTS HTML renderer (for cast_site on TV devices) |
-| `GET /gsync` | Debug: returns SYNC response without going through Google |
-| `GET /gquery` | Debug: returns live QUERY state without going through Google |
+| `GET /gsync` | Debug: returns SYNC response without going through Google (pretty-printed JSON) |
+| `GET /gquery` | Debug: returns live QUERY state without going through Google (pretty-printed JSON) |
 
 ## CI/CD
 

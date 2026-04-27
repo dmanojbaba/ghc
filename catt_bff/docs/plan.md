@@ -88,6 +88,7 @@ Channels: `ping` (1), `pttv` / Tamil News (2), `sun` / Sun News (3), `london` (4
 Helper functions:
 - `getInputKey(deviceId, input, fallback)` — resolves alias or display name → key
 - `getChannelCode(deviceId, channelNumber)` — resolves channel number → key
+- `isAudioOnlyInput(deviceId, inputKey)` — returns `true` if any `name_synonym` for the input starts with `"mini"`; used to auto-reset `app` to `default` when switching to audio-only devices
 
 ---
 
@@ -158,10 +159,10 @@ STOPPED ──(enqueue when idle)──► PLAYING
 | Method | Behaviour |
 |---|---|
 | `enqueue(url, title?)` | Add to queue; if `now == stopped`, call `advance()` immediately |
-| `advance()` | Pop next from queue; if empty, play ping sentinel + set `now=stopped`; else cast, set `now=playing`, set alarm in 10s (settle) |
+| `advance()` | Pop next from queue; if empty, cast ping sentinel (URL-resolved via `getParsedUrl`) + set `now=stopped`; else cast item URL, set `now=playing`, set alarm in 10s (settle) |
 | `clear()` | Stop catt_server, cancel alarm, clear queue, reset `now`, `prev`, `next`, `tts` to defaults (preserves `app`, `device`, `playlist`) |
-| `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item, load rest into queue, set alarm in 10s (settle) |
-| `playPrev()` | Cast `prev` URL, set `now=playing`, schedule alarm |
+| `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 10s (settle) |
+| `playPrev()` | Cast `prev` URL (URL-resolved via `getParsedUrl`), set `now=playing`, schedule alarm |
 | `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration → 10s poll; if `getInfo` fails → `getStatus` fallback |
 | `getState()` | Return current state dict (device, app, now, prev, tts, playlist, next, queue array) |
 
@@ -180,7 +181,7 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 | `GET/POST` | `/device/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
 | `GET/POST` | `/device/box/site/:arg` | Stop + cancel alarm + set `now=stopped`; cast_site URL if http, else TTS (HTML on TV, `tts` command on others) |
 | `GET` | `/device/box/shuffle` | `shuffle(playlist)` using saved `playlist` state key |
-| `GET` | `/device/box/set/:key/:value` | Set a kv state key (use to set `playlist`, `device`, `app`, `volume`, etc.) |
+| `GET` | `/device/box/set/:key/:value` | Set a kv state key; setting `device` to an audio-only input (name starts with "mini") auto-resets `app` to `default` |
 
 ---
 
@@ -378,8 +379,11 @@ The `mediaShuffle` EXECUTE intent will read this value and populate the queue.
 | No Report State | State reported reactively via QUERY intent only |
 | Random 8-char token, no expiry | Random 32-char token (CSPRNG), `expires_in: 86400`, no `refresh_token` |
 | `/gauth`, `/gtoken`, `/gexec`, `/gcatt`, etc. | `/oauth/auth`, `/oauth/token`, `/fulfillment`, `/device/:name/*` |
-| `mediaShuffle` reads `catt` KV key | `mediaShuffle` reads `playlist` kv state key |
+| `mediaShuffle` reads `catt` KV key | `mediaShuffle` reads `playlist` kv state key; no prior `stop` — cast preempts playback |
 | No Slack/Telegram | `/slack`, `/telegram` — unified endpoints supporting `cast`, `volume`, `play`, `stop`, `prev`, `next`, `tts` |
+| No audio-only device awareness | Switching input to a Mini device (name starts with "mini") auto-resets `app` to `default` |
+| `prev`/`next` sentinel keys sent raw to catt_server | Bare redirect keys (`pingr2`, `ping`) resolved via `getParsedUrl` before sending to catt_server |
+| `OnOff` calls `stop` on catt_server | `OnOff` uses `/clear` — resets queue state only, no catt_server call |
 
 ## Constraints and Trade-offs
 

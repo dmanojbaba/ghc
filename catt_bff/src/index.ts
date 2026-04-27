@@ -33,12 +33,12 @@ export default {
 
     // Debug: verify SYNC response without going through Google
     if (path === "/gsync" && method === "GET") {
-      return Response.json(await handleSync("debug"));
+      return new Response(JSON.stringify(await handleSync("debug"), null, 2), { headers: { "content-type": "application/json" } });
     }
 
     // Debug: verify QUERY response without going through Google
     if (path === "/gquery" && method === "GET") {
-      return Response.json(await handleQuery("debug", { devices: [{ id: DEVICE_ID }] }, env));
+      return new Response(JSON.stringify(await handleQuery("debug", { devices: [{ id: DEVICE_ID }] }, env), null, 2), { headers: { "content-type": "application/json" } });
     }
 
     // OAuth

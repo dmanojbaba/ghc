@@ -157,7 +157,7 @@ Structure:
 - `ThreadPoolExecutor` with 4 workers — handlers run off the request thread for timeout support
 - `POST /catt` — dispatches to handler via executor, wraps errors into structured JSON
 - `main()` with argparse for `--host`, `--port`, `--timeout` (default 30s), `--debug`
-- Structured logging via `logging.basicConfig` — INFO on success, WARNING on client errors, ERROR/EXCEPTION on server errors
+- Structured logging via `logging.basicConfig` — INFO on request received (logs full JSON body including `command`, `device`, `value`), INFO on success, WARNING on client errors, ERROR/EXCEPTION on server errors
 
 ### Constants
 
