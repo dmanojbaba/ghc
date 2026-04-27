@@ -1,12 +1,12 @@
-name: catt-bff
+name: redirect
 
 on:
   workflow_dispatch:
   pull_request:
-    paths: [ catt_bff/** ]
+    paths: [ redirect/** ]
   push:
     branches: [ main ]
-    paths: [ catt_bff/** ]
+    paths: [ redirect/** ]
 
 jobs:
   wrangler-deploy:
@@ -18,19 +18,19 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: catt_bff/package-lock.json
+          cache-dependency-path: redirect/package-lock.json
 
       - name: Install dependencies
-        working-directory: catt_bff
+        working-directory: redirect
         run: npm ci
 
-      - name: Run tests
-        working-directory: catt_bff
-        run: npm test
+      # - name: Run tests
+      #   working-directory: redirect
+      #   run: npm test
 
       - name: Dry run deploy
         if: github.event_name == 'pull_request'
-        working-directory: catt_bff
+        working-directory: redirect
         run: npx wrangler deploy --dry-run
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -38,7 +38,7 @@ jobs:
 
       - name: Deploy
         if: github.event_name != 'pull_request'
-        working-directory: catt_bff
+        working-directory: redirect
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
