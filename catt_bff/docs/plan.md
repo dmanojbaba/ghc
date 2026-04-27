@@ -168,18 +168,20 @@ STOPPED ──(enqueue when idle)──► PLAYING
 
 ### HTTP routes (handled inside DO `fetch`)
 
+All paths use the `/device/box/` prefix — both from external HTTP requests forwarded by the Worker and from internal DO stub calls.
+
 | Method | Path | Action |
 |---|---|---|
-| `GET` | `/box/state` | Return `getState()` as JSON |
-| `GET` | `/box/play` | `play_toggle` on catt_server |
-| `GET` | `/box/prev` | `playPrev()` |
-| `GET` | `/box/next` | `skip()` |
-| `GET` | `/box/stop` | `clear()` |
-| `GET` | `/box/clear` | Clear queue + reset `now`, keep other state |
-| `GET/POST` | `/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
-| `GET/POST` | `/box/site/:arg` | Stop + cancel alarm + set `now=stopped`; cast_site URL if http, else TTS (HTML on TV, `tts` command on others) |
-| `GET` | `/box/shuffle` | `shuffle(playlist)` using saved `playlist` state key |
-| `GET` | `/box/set/:key/:value` | Set a kv state key (use to set `playlist`, `device`, `app`, etc.) |
+| `GET` | `/device/box/state` | Return `getState()` as JSON |
+| `GET` | `/device/box/play` | `play_toggle` on catt_server |
+| `GET` | `/device/box/prev` | `playPrev()` |
+| `GET` | `/device/box/next` | `skip()` |
+| `GET` | `/device/box/stop` | `clear()` |
+| `GET` | `/device/box/clear` | Clear queue + reset `now`, keep other state |
+| `GET/POST` | `/device/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
+| `GET/POST` | `/device/box/site/:arg` | Stop + cancel alarm + set `now=stopped`; cast_site URL if http, else TTS (HTML on TV, `tts` command on others) |
+| `GET` | `/device/box/shuffle` | `shuffle(playlist)` using saved `playlist` state key |
+| `GET` | `/device/box/set/:key/:value` | Set a kv state key (use to set `playlist`, `device`, `app`, `volume`, etc.) |
 
 ---
 
