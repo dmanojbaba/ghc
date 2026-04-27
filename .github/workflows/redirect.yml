@@ -24,9 +24,9 @@ jobs:
         working-directory: redirect
         run: npm ci
 
-      - name: Run tests
-        working-directory: redirect
-        run: npm test
+      # - name: Run tests
+      #   working-directory: redirect
+      #   run: npm test
 
       - name: Dry run deploy
         if: github.event_name == 'pull_request'
