@@ -2,7 +2,7 @@ import { castCommand } from "./catt";
 import { getParsedUrl } from "./urlHelper";
 import { resolveDevice } from "./devices";
 
-const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "rewind", "ffwd"]);
+const DO_COMMANDS = new Set(["play", "stop", "prev", "next"]);
 
 function resolveValue(value: string): string {
   return getParsedUrl(value);
@@ -17,6 +17,11 @@ async function dispatchCommand(
 ): Promise<string> {
   if (DO_COMMANDS.has(command)) {
     await doStub.fetch(new Request(`https://do/device/box/${command}`));
+    return command;
+  }
+  if (command === "rewind" || command === "ffwd") {
+    const seconds = rawValue.trim() || device;
+    await doStub.fetch(new Request(`https://do/device/box/${command}/${encodeURIComponent(seconds)}`));
     return command;
   }
   if (command === "sleep") {

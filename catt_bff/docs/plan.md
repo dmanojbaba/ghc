@@ -326,8 +326,8 @@ Returns `{}`.
 | `prev` | DeviceQueue DO (`/box/prev`) | Uses stored `device` key; `device` arg ignored |
 | `next` | DeviceQueue DO (`/box/next`) | Uses stored `device` key; `device` arg ignored |
 | `tts` | DeviceQueue DO (`/box/site/:text`) | All remaining tokens joined as text; uses stored `device` key |
-| `rewind` | DeviceQueue DO (`/box/rewind/:seconds`) | Value is seconds (default 30); uses stored `device` key |
-| `ffwd` | DeviceQueue DO (`/box/ffwd/:seconds`) | Value is seconds (default 30); uses stored `device` key |
+| `rewind` | DeviceQueue DO (`/box/rewind/:seconds`) | Value is seconds (default 30); falls back to `device` token if no explicit value given; uses stored `device` key |
+| `ffwd` | DeviceQueue DO (`/box/ffwd/:seconds`) | Value is seconds (default 30); falls back to `device` token if no explicit value given; uses stored `device` key |
 | `sleep` | DeviceQueue DO (`/box/sleep/:arg`) | Value is minutes or `cancel`; `device` arg ignored |
 
 - Slack: no auth (personal workspace); returns plain text response matching the command name

@@ -46,7 +46,7 @@ Google Home / Slack / Telegram / curl
 - **`src/catt.ts`** — HTTP client for `catt_server`. Attaches `X-Catt-Secret` header.
 - **`src/urlHelper.ts`** — Normalises YouTube URLs (short links, bare IDs, `/embed/`, `/v/`) and resolves bare shortcodes to `https://r.manojbaba.com/r/<key>`.
 - **`src/googleHome.ts`** — Google Home C2C SYNC/QUERY/EXECUTE intent handlers. `selectChannel` and `relativeChannel` call `/clear` before `/cast` to ensure immediate playback rather than queuing. `mediaSeekRelative` maps positive `relativePositionMs` to `ffwd` and negative to `rewind` on `catt_server`.
-- **`src/integrations.ts`** — Slack slash command + Telegram webhook handlers. Supported commands: `cast`, `volume`, `tts`, `play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep`. `rewind`, `ffwd`, and `sleep` route through the DO (which resolves the current device from state). `sleep` accepts a number of minutes or `cancel` as its value.
+- **`src/integrations.ts`** — Slack slash command + Telegram webhook handlers. Supported commands: `cast`, `volume`, `tts`, `play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep`. `rewind`, `ffwd`, and `sleep` route through the DO with the value appended to the URL path. For all three, the value falls back to the `device` token if no explicit value is given (e.g. `rewind 60` puts `60` in the device slot, which is caught by the fallback).
 - **`src/cattHandler.ts`** — Handler for `POST /catt`: routes `DO_COMMANDS` (`play`, `stop`, `prev`, `next`) directly to the DO; routes `DO_VALUE_COMMANDS` (`rewind`, `ffwd`, `sleep`) to the DO with the `value` field appended to the URL path; routes everything else to the DO's `/catt` sub-route.
 - **`src/oauth.ts`** — Google account-linking stub (returns a random 32-char token, 24 h expiry).
 
