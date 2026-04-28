@@ -125,7 +125,7 @@ The `kv` table replaces Cloudflare KV from the prototype.
 
 | Key | Default | Description |
 |---|---|---|
-| `now` | `stopped` | `playing` or `stopped` |
+| `session` | `idle` | `active` or `idle` |
 | `prev` | `pingr2` | Last played URL (for repeat) |
 | `next` | `ping` | Not read from kv — `getState()` derives next from the queue table directly; kv value is a legacy default only |
 | `app` | `default` | `default` or `youtube` — controls `force_default` |
@@ -137,20 +137,21 @@ The `kv` table replaces Cloudflare KV from the prototype.
 ### State Machine
 
 ```
-STOPPED ──(enqueue when idle)──► PLAYING
-   ▲                                │
-   └──(queue empty after advance)───┤
-                                    │
-                        cast starts → alarm in 30s (settle)
-                                    │
-                        alarm fires → getInfo (player_state + duration)
-                                    │
-                    IDLE/UNKNOWN → advance()
-                    PLAYING, duration known:
-                        remaining > 10s → reschedule at min(remaining - 10s, 60s)
-                        remaining ≤ 10s → fast poll every 3s
-                    PLAYING, duration unknown (live stream) → cancel alarm
-                    getInfo fails → getStatus fallback → poll every 10s
+IDLE ──(enqueue when idle)──► ACTIVE
+  ▲                                │
+  └──(queue empty after advance)───┤
+                                   │
+                       cast starts → alarm in 30s (settle)
+                                   │
+                       alarm fires → getInfo (player_state + duration)
+                                   │
+                   IDLE/UNKNOWN → advance()
+                   PLAYING, duration known:
+                       remaining > 10s → reschedule at min(remaining - 10s, 60s)
+                       remaining ≤ 10s → fast poll every 3s
+                   PLAYING, duration unknown (live stream) → cancel alarm
+                   PAUSED → poll every 60s (Chromecast drops session after ~5 min → IDLE)
+                   getInfo fails → getStatus fallback → poll every 10s
 ```
 
 ### Alarm timing constants
@@ -167,13 +168,13 @@ STOPPED ──(enqueue when idle)──► PLAYING
 
 | Method | Behaviour |
 |---|---|
-| `enqueue(url, title?)` | Add to queue; if `now == stopped`, call `advance()` immediately |
-| `advance(userInitiated?)` | Pop next from queue; if empty + `userInitiated=true` → cast `DEFAULT_NEXT` (ping), set `now=stopped`, cancel alarm; if empty + not user-initiated → set `now=stopped`, cancel alarm, nothing cast; else cast item URL, set `now=playing`, set alarm in 30s (settle) |
-| `clear()` | Stop catt_server, cancel alarm, clear queue, reset `now`, `prev`, `next`, `tts`, `channel` to defaults (preserves `app`, `device`, `playlist`) |
+| `enqueue(url, title?)` | Add to queue; if `session == idle`, call `advance()` immediately |
+| `advance(userInitiated?)` | Pop next from queue; if empty + `userInitiated=true` → cast `DEFAULT_NEXT` (ping), set `session=idle`, cancel alarm; if empty + not user-initiated → set `session=idle`, cancel alarm, nothing cast; else cast item URL, set `session=active`, set alarm in 30s (settle) |
+| `clear()` | Stop catt_server, cancel alarm, clear queue, reset `session`, `prev`, `next`, `tts`, `channel` to defaults (preserves `app`, `device`, `playlist`) |
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 30s (settle) |
-| `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `now=playing`, schedule alarm |
-| `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration → 10s poll; if `getInfo` fails → `getStatus` fallback |
-| `getState()` | Return current state dict (alarm, now, device, channel, app, volume, prev, next, playlist, tts, queue array) — `alarm` is ISO timestamp of next scheduled alarm or `null` |
+| `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `session=active`, schedule alarm |
+| `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration (live stream) → cancel alarm; if PAUSED → poll every 60s; if `getInfo` fails → `getStatus` fallback |
+| `getState()` | Return current state dict (alarm, session, device, channel, app, volume, prev, next, playlist, tts, queue array) — `alarm` is ISO timestamp of next scheduled alarm or `null` |
 
 ### HTTP routes (handled inside DO `fetch`)
 
@@ -185,10 +186,10 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 | `GET` | `/device/box/play` | `play_toggle` on catt_server |
 | `GET` | `/device/box/prev` | `playPrev()` |
 | `GET` | `/device/box/next` | `advance()` |
-| `GET` | `/device/box/stop` | Stop catt_server + clear queue + cancel alarm + reset `now`, `prev`, `next`, `tts` |
-| `GET` | `/device/box/clear` | Clear queue + cancel alarm + reset `now`, `prev`, `next`, `tts` — no catt_server call |
+| `GET` | `/device/box/stop` | Stop catt_server + clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts` |
+| `GET` | `/device/box/clear` | Clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts` — no catt_server call |
 | `GET/POST` | `/device/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
-| `GET/POST` | `/device/box/site/:arg` | Stop + clear queue + cancel alarm + set `now=stopped`; cast_site URL if http, else TTS (HTML on TV via `/echo?text=`, `tts` command on others) |
+| `GET/POST` | `/device/box/site/:arg` | Stop + clear queue + cancel alarm + set `session=idle`; cast_site URL if http, else TTS (HTML on TV via `/echo?text=`, `tts` command on others) |
 | `GET` | `/device/box/shuffle` | `shuffle(playlist)` using saved `playlist` state key |
 | `GET` | `/device/box/set/:key/:value` | Set a kv state key; setting `device` to an audio-only input (name starts with "mini") auto-resets `app` to `default` |
 
@@ -199,7 +200,7 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 | Calls catt_server `stop` | No | Yes | No | Yes |
 | Clears queue | Yes | Yes | Yes | Yes |
 | Cancels alarm | Yes | Yes | Yes | Yes |
-| Resets `now` | Yes | Yes | Yes | Yes |
+| Resets `session` | Yes | Yes | Yes | Yes |
 | Resets `prev` | Yes | Yes | Yes | Yes |
 | Resets `next` | Yes | Yes | Yes | Yes |
 | Resets `tts` | Yes | Yes | Yes | Yes |

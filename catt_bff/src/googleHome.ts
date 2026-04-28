@@ -55,7 +55,7 @@ export async function handleQuery(
         currentVolume:       Number(doSt.volume ?? DEFAULT_VOLUME),
         isMuted:             false,
         activityState:       "ACTIVE",
-        playbackState:       doSt.now === "playing" ? "PLAYING" : "STOPPED",
+        playbackState:       doSt.session === "active" ? "PLAYING" : "STOPPED",
       };
     } else {
       states[device.id] = { online: true, on: true };

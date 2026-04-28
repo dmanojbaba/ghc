@@ -1,7 +1,7 @@
 import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems, getParsedUrl } from "./urlHelper";
 import {
-  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_NOW, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME, DEFAULT_CHANNEL,
+  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME, DEFAULT_CHANNEL,
   resolveDevice, isAudioOnlyInput, getInputKey, DEVICE_ID,
 } from "./devices";
 
@@ -41,7 +41,7 @@ export class DeviceQueue implements DurableObject {
 
   private defaultFor(key: string): string {
     const defaults: Record<string, string> = {
-      now:      DEFAULT_NOW,
+      session:  DEFAULT_SESSION,
       prev:     DEFAULT_PREV,
       next:     DEFAULT_NEXT,
       app:      DEFAULT_APP,
@@ -74,7 +74,7 @@ export class DeviceQueue implements DurableObject {
       title ?? null,
       new Date().toISOString(),
     );
-    if (this.get("now") === DEFAULT_NOW) {
+    if (this.get("session") === DEFAULT_SESSION) {
       await this.advance();
     }
   }
@@ -93,7 +93,7 @@ export class DeviceQueue implements DurableObject {
           force_default: this.forceDefault(),
         }, this.secret);
       }
-      this.set("now", DEFAULT_NOW);
+      this.set("session", DEFAULT_SESSION);
       await this.state.storage.deleteAlarm();
       return;
     }
@@ -105,14 +105,14 @@ export class DeviceQueue implements DurableObject {
       force_default: this.forceDefault(),
     }, this.secret);
     this.set("prev", row.url);
-    this.set("now", "playing");
+    this.set("session", "active");
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
   }
 
   private async clearState(): Promise<void> {
     this.sql.exec("DELETE FROM queue");
     await this.state.storage.deleteAlarm();
-    this.set("now",     DEFAULT_NOW);
+    this.set("now",     DEFAULT_SESSION);
     this.set("prev",    DEFAULT_PREV);
     this.set("next",    DEFAULT_NEXT);
     this.set("tts",     DEFAULT_TTS);
@@ -132,7 +132,7 @@ export class DeviceQueue implements DurableObject {
     try {
       ({ first, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId));
     } catch {
-      this.set("now", DEFAULT_NOW);
+      this.set("session", DEFAULT_SESSION);
       await this.state.storage.deleteAlarm();
       return;
     }
@@ -145,7 +145,7 @@ export class DeviceQueue implements DurableObject {
     await castCommand(this.serverUrl, device, "cast", first, {
       force_default: this.forceDefault(),
     }, this.secret);
-    this.set("now", "playing");
+    this.set("session", "active");
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
   }
 
@@ -154,7 +154,7 @@ export class DeviceQueue implements DurableObject {
     await castCommand(this.serverUrl, device, "stop", undefined, undefined, this.secret);
     this.sql.exec("DELETE FROM queue");
     await this.state.storage.deleteAlarm();
-    this.set("now", DEFAULT_NOW);
+    this.set("session", DEFAULT_SESSION);
     if (arg.startsWith("http")) {
       await castCommand(this.serverUrl, device, "cast_site", arg, undefined, this.secret);
     } else {
@@ -181,16 +181,16 @@ export class DeviceQueue implements DurableObject {
     }
 
     if (rawPrev !== DEFAULT_PREV && rawPrev !== "tts") {
-      this.set("now", "playing");
+      this.set("session", "active");
       await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
     } else {
-      this.set("now", DEFAULT_NOW);
+      this.set("session", DEFAULT_SESSION);
       await this.state.storage.deleteAlarm();
     }
   }
 
   async alarm(): Promise<void> {
-    if (this.get("now") === DEFAULT_NOW) return;
+    if (this.get("session") === DEFAULT_SESSION) return;
     const device = resolveDevice(this.get("device"));
 
     try {
@@ -254,7 +254,7 @@ export class DeviceQueue implements DurableObject {
 
     return {
       alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
-      now:       this.get("now"),
+      session:   this.get("session"),
       device:    this.get("device"),
       channel:   this.get("channel"),
       app:       this.get("app"),
@@ -341,7 +341,7 @@ export class DeviceQueue implements DurableObject {
               force_default: this.forceDefault(),
             }, this.secret);
             this.set("prev", parsedUrl);
-            this.set("now", "playing");
+            this.set("session", "active");
             await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
           }
 
