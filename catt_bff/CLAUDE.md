@@ -41,20 +41,24 @@ Google Home / Slack / Telegram / curl
 ### Key source files
 
 - **`src/index.ts`** — Fetch handler + `scheduled` handler (daily state reset at 03:03 UTC: clears queue/alarm, resets `app` and `device` to defaults — no catt_server call). Routes `/device/*` to the `DeviceQueue` Durable Object. Auth check skips `/fulfillment`, `/oauth/*`, `/echo`.
-- **`src/DeviceQueue.ts`** — Durable Object with SQLite (`state.storage.sql`). Two tables: `queue` (play queue) and `kv` (per-device state). Handles enqueue/advance/shuffle/alarm-based polling. `fetch()` dispatches on `parts[2]` (the action segment of `/device/box/<action>`).
+- **`src/DeviceQueue.ts`** — Durable Object with SQLite (`state.storage.sql`). Two tables: `queue` (play queue) and `kv` (per-device state). Handles enqueue/advance/shuffle/alarm-based polling. `fetch()` dispatches on `parts[2]` (the action segment of `/device/box/<action>`). Routes: `state`, `play`, `prev`, `next`, `stop`, `clear`, `cast`, `site`, `shuffle`, `set`, `catt`, `rewind`, `ffwd`, `sleep`. `state` response includes `Cache-Control: no-store`.
 - **`src/devices.ts`** — Single device (`"box"`), input aliases (`k`=Mini Kitchen, `o`=Mini Office, `b`=Mini Bedroom, `zbk`=Mini ZBK, `tv`=Google TV, `otv`=Office TV), channel list, and defaults.
 - **`src/catt.ts`** — HTTP client for `catt_server`. Attaches `X-Catt-Secret` header.
 - **`src/urlHelper.ts`** — Normalises YouTube URLs (short links, bare IDs, `/embed/`, `/v/`) and resolves bare shortcodes to `https://r.manojbaba.com/r/<key>`.
-- **`src/googleHome.ts`** — Google Home C2C SYNC/QUERY/EXECUTE intent handlers. `selectChannel` and `relativeChannel` call `/clear` before `/cast` to ensure immediate playback rather than queuing.
-- **`src/integrations.ts`** — Slack slash command + Telegram webhook handlers.
-- **`src/cattHandler.ts`** — Handler for `POST /catt`: routes DO_COMMANDS (`play`, `stop`, `prev`, `next`) to the DO, everything else to the DO's `/catt` sub-route.
+- **`src/googleHome.ts`** — Google Home C2C SYNC/QUERY/EXECUTE intent handlers. `selectChannel` and `relativeChannel` call `/clear` before `/cast` to ensure immediate playback rather than queuing. `mediaSeekRelative` maps positive `relativePositionMs` to `ffwd` and negative to `rewind` on `catt_server`.
+- **`src/integrations.ts`** — Slack slash command + Telegram webhook handlers. Supported commands: `cast`, `volume`, `tts`, `play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep`. `rewind`, `ffwd`, and `sleep` route through the DO (which resolves the current device from state). `sleep` accepts a number of minutes or `cancel` as its value.
+- **`src/cattHandler.ts`** — Handler for `POST /catt`: routes `DO_COMMANDS` (`play`, `stop`, `prev`, `next`) directly to the DO; routes `DO_VALUE_COMMANDS` (`rewind`, `ffwd`, `sleep`) to the DO with the `value` field appended to the URL path; routes everything else to the DO's `/catt` sub-route.
 - **`src/oauth.ts`** — Google account-linking stub (returns a random 32-char token, 24 h expiry).
 
 ### Durable Object state
 
-`kv` table keys: `session`, `prev`, `next`, `app`, `tts`, `device`, `channel`, `playlist`, `volume`. Defaults defined in `devices.ts`.
+`kv` table keys: `session`, `prev`, `next`, `app`, `tts`, `device`, `channel`, `playlist`, `volume`, `sleep_at`. Defaults defined in `devices.ts`.
+
+`queue` table: `{ position, url, title, added_at }`. `GET /device/box/state` returns `queue` as `{ position, url }[]` covering all pending items (including the next-to-play item). `next` is also returned as a bare URL for backwards compatibility.
 
 Alarm-based polling: after a cast, alarm fires after `CAST_SETTLE_MS` (30 s) to allow the device to settle. Then polls `getInfo` every `HEARTBEAT_MS` (60 s) to detect external stops, switching to `FAST_POLL_MS` (3 s) within the last `APPROACH_WINDOW_MS` (10 s) of the video. Falls back to `getStatus` on `getInfo` error. Live streams (no duration) cancel the alarm immediately — they never end naturally. PAUSED polls every `HEARTBEAT_MS` (60 s) — Chromecast drops paused sessions after ~5 min, which transitions to IDLE naturally. On IDLE, advances the queue.
+
+The DO has a single alarm slot shared between playback polling and the sleep timer. `sleep_at` is stored as a ms timestamp in `kv`. `alarm()` checks `sleep_at` first (before the session-idle guard) and calls `clear()` if due — so it fires even when nothing is playing. When session is idle and a sleep timer is set, the route sets the alarm directly to `sleep_at`.
 
 When switching to an audio-only input (Mini devices), `app` is always reset to `"default"`.
 

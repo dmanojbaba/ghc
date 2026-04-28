@@ -19,6 +19,11 @@ async function dispatchCommand(
     await doStub.fetch(new Request(`https://do/device/box/${command}`));
     return command;
   }
+  if (command === "sleep") {
+    const arg = rawValue.trim() || device;
+    await doStub.fetch(new Request(`https://do/device/box/sleep/${encodeURIComponent(arg)}`));
+    return "sleep";
+  }
   if (command === "tts") {
     await doStub.fetch(new Request(`https://do/device/box/site/${encodeURIComponent(rawValue)}`));
     return "tts";
@@ -39,7 +44,7 @@ export async function handleSlack(request: Request, env: Env, doStub: DurableObj
   const tokens = text.split(/\s+/);
 
   const [command, device = "", ...rest] = tokens;
-  if (!command) return new Response("Usage: <cast|volume|tts|play|stop|prev|next> [device] [url_or_value]", { status: 200 });
+  if (!command) return new Response("Usage: <cast|volume|tts|play|stop|prev|next|rewind|ffwd|sleep> [device] [url_or_value]", { status: 200 });
 
   const rawValue = rest.join(" ");
   const result = await dispatchCommand(command, device, rawValue, env, doStub);

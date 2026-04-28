@@ -50,6 +50,7 @@ export class DeviceQueue implements DurableObject {
       channel:  DEFAULT_CHANNEL,
       playlist: DEFAULT_PLAYLIST,
       volume:   String(DEFAULT_VOLUME),
+      sleep_at: "",
     };
     return defaults[key] ?? "";
   }
@@ -117,6 +118,7 @@ export class DeviceQueue implements DurableObject {
     this.set("next",    DEFAULT_NEXT);
     this.set("tts",     DEFAULT_TTS);
     this.set("channel", DEFAULT_CHANNEL);
+    this.set("sleep_at", "");
   }
 
   async clear(): Promise<void> {
@@ -190,6 +192,12 @@ export class DeviceQueue implements DurableObject {
   }
 
   async alarm(): Promise<void> {
+    const sleepAt = this.get("sleep_at");
+    if (sleepAt && Date.now() >= Number(sleepAt)) {
+      await this.clear();
+      return;
+    }
+
     if (this.get("session") === DEFAULT_SESSION) return;
     const device = resolveDevice(this.get("device"));
 
@@ -252,6 +260,8 @@ export class DeviceQueue implements DurableObject {
 
     const alarmTs = await this.state.storage.getAlarm();
 
+    const sleepAt = this.get("sleep_at");
+
     return {
       alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
       session:   this.get("session"),
@@ -264,6 +274,7 @@ export class DeviceQueue implements DurableObject {
       playlist:  this.get("playlist"),
       tts:       this.get("tts"),
       queue:     rows.map((r) => ({ position: r.position, url: r.url })),
+      sleep_at:  sleepAt ? new Date(Number(sleepAt)).toISOString() : null,
     };
   }
 
@@ -363,6 +374,24 @@ export class DeviceQueue implements DurableObject {
       case "shuffle": {
         const playlistId = this.get("playlist");
         if (playlistId) await this.shuffle(playlistId);
+        return new Response("ok");
+      }
+
+      case "sleep": {
+        const arg = parts[3] ?? "";
+        if (arg === "cancel") {
+          this.set("sleep_at", "");
+          // If session is idle there's no polling alarm — nothing to reschedule
+          return new Response("ok");
+        }
+        const minutes = Number(arg);
+        if (!minutes || minutes <= 0) return new Response("invalid minutes", { status: 400 });
+        const sleepAt = Date.now() + minutes * 60_000;
+        this.set("sleep_at", String(sleepAt));
+        // If session is idle the polling alarm isn't running — set one directly
+        if (this.get("session") === DEFAULT_SESSION) {
+          await this.state.storage.setAlarm(sleepAt);
+        }
         return new Response("ok");
       }
 
