@@ -8,7 +8,8 @@ import {
 const POLL_INTERVAL_MS   = 10_000;
 const FAST_POLL_MS       = 3_000;
 const APPROACH_WINDOW_MS = 10_000;
-const CAST_SETTLE_MS     = 10_000;
+const CAST_SETTLE_MS     = 30_000;
+const HEARTBEAT_MS       = 60_000;
 
 export class DeviceQueue implements DurableObject {
   private sql: SqlStorage;
@@ -208,7 +209,7 @@ export class DeviceQueue implements DurableObject {
         const remainingMs = (duration - currentTime) * 1000;
         const delayMs     = remainingMs <= APPROACH_WINDOW_MS
           ? FAST_POLL_MS
-          : Math.max(remainingMs - APPROACH_WINDOW_MS, FAST_POLL_MS);
+          : Math.min(remainingMs - APPROACH_WINDOW_MS, HEARTBEAT_MS);
         await this.state.storage.setAlarm(Date.now() + delayMs);
         return;
       }

@@ -54,7 +54,7 @@ Google Home / Slack / Telegram / curl
 
 `kv` table keys: `now`, `prev`, `next`, `app`, `tts`, `device`, `channel`, `playlist`, `volume`. Defaults defined in `devices.ts`.
 
-Alarm-based polling: after a cast, alarm fires after `CAST_SETTLE_MS` (10 s), then polls `getInfo` → falls back to `getStatus` on error to detect playback end and advance the queue.
+Alarm-based polling: after a cast, alarm fires after `CAST_SETTLE_MS` (30 s) to allow the device to settle. Then polls `getInfo` every `HEARTBEAT_MS` (60 s) to detect external stops, switching to `FAST_POLL_MS` (3 s) within the last `APPROACH_WINDOW_MS` (10 s) of the video. Falls back to `getStatus` on `getInfo` error. Live streams (no duration) cancel the alarm immediately — they never end naturally. On IDLE, advances the queue.
 
 When switching to an audio-only input (Mini devices), `app` is always reset to `"default"`.
 
