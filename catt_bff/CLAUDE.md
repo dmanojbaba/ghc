@@ -40,7 +40,7 @@ Google Home / Slack / Telegram / curl
 
 ### Key source files
 
-- **`src/index.ts`** — Fetch handler + `scheduled` handler (daily stop at 03:03 UTC). Routes `/device/*` to the `DeviceQueue` Durable Object. Auth check skips `/fulfillment`, `/oauth/*`, `/echo`.
+- **`src/index.ts`** — Fetch handler + `scheduled` handler (daily state reset at 03:03 UTC: clears queue/alarm, resets `app` and `device` to defaults — no catt_server call). Routes `/device/*` to the `DeviceQueue` Durable Object. Auth check skips `/fulfillment`, `/oauth/*`, `/echo`.
 - **`src/DeviceQueue.ts`** — Durable Object with SQLite (`state.storage.sql`). Two tables: `queue` (play queue) and `kv` (per-device state). Handles enqueue/advance/shuffle/alarm-based polling. `fetch()` dispatches on `parts[2]` (the action segment of `/device/box/<action>`).
 - **`src/devices.ts`** — Single device (`"box"`), input aliases (`k`=Mini Kitchen, `o`=Mini Office, `b`=Mini Bedroom, `zbk`=Mini ZBK, `tv`=Google TV, `otv`=Office TV), channel list, and defaults.
 - **`src/catt.ts`** — HTTP client for `catt_server`. Attaches `X-Catt-Secret` header.

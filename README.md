@@ -98,6 +98,10 @@ wrangler deploy
 | `GET /gsync` | Debug: returns SYNC response without going through Google (pretty-printed JSON) |
 | `GET /gquery` | Debug: returns live QUERY state without going through Google (pretty-printed JSON) |
 
+### Scheduled jobs (cron)
+
+- **`3 3 * * *`** (3:03am UTC daily): Clears DO state (queue, alarm, `now`/`prev`/`next`/`tts`/`channel`) and resets `app` and `device` to defaults. No catt_server call.
+
 ### API Reference
 
 #### `POST /catt` — Ad-hoc commands
@@ -157,8 +161,8 @@ curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API
 | `/device/box/play` | Toggle play/pause |
 | `/device/box/prev` | Play previous (replays last TTS if `prev=tts`, plays pingr2 if no history) |
 | `/device/box/next` | Advance queue; casts ping if queue empty |
-| `/device/box/stop` | Stop playback, clear queue, cancel alarm |
-| `/device/box/clear` | Clear queue + cancel alarm, no catt_server call |
+| `/device/box/stop` | Stop playback on catt_server, clear queue, cancel alarm |
+| `/device/box/clear` | Clear queue + cancel alarm only, no catt_server call |
 | `/device/box/cast/:url` | Enqueue URL |
 | `/device/box/site/:arg` | Stop + clear queue + cast_site URL, or TTS text |
 | `/device/box/shuffle` | Shuffle saved playlist |

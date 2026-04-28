@@ -3,7 +3,7 @@ import { handleFulfillment, handleSync, handleQuery } from "./googleHome";
 import { handleOAuthAuth, handleOAuthToken } from "./oauth";
 import { handleSlack, handleTelegram } from "./integrations";
 import { handleCatt } from "./cattHandler";
-import { DEVICE_ID } from "./devices";
+import { DEVICE_ID, DEFAULT_APP, DEFAULT_DEVICE } from "./devices";
 
 export { DeviceQueue };
 
@@ -115,6 +115,8 @@ export default {
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     const stub = getDoStub(env, DEVICE_ID);
-    await stub.fetch(new Request("https://do/device/box/stop"));
+    await stub.fetch(new Request("https://do/device/box/clear"));
+    await stub.fetch(new Request("https://do/device/box/set/app/" + DEFAULT_APP));
+    await stub.fetch(new Request("https://do/device/box/set/device/" + DEFAULT_DEVICE));
   },
 };
