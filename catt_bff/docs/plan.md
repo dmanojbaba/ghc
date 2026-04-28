@@ -117,9 +117,15 @@ CREATE TABLE IF NOT EXISTS kv (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS history (
+  position  INTEGER PRIMARY KEY AUTOINCREMENT,
+  url       TEXT NOT NULL,
+  played_at TEXT NOT NULL
+);
 ```
 
-The `kv` table replaces Cloudflare KV from the prototype.
+The `kv` table replaces Cloudflare KV from the prototype. The `history` table stores the last 10 played URLs (excluding TTS and cast_site), trimmed automatically after each insert.
 
 ### State keys
 
@@ -133,6 +139,7 @@ The `kv` table replaces Cloudflare KV from the prototype.
 | `device` | `otv` | Active input key |
 | `channel` | `ping` | Last selected channel key; used by `relativeChannel` to compute adjacent channel |
 | `playlist` | `""` | YouTube playlist ID used by `mediaShuffle`; set via `/box/set/playlist/:id` |
+| `sleep_at` | `""` | Unix ms timestamp for sleep timer; empty when unset. Checked in `alarm()` before session guard — fires `clear()` when due even if session is idle. |
 
 ### State Machine
 
@@ -170,11 +177,11 @@ IDLE ──(enqueue when idle)──► ACTIVE
 |---|---|
 | `enqueue(url, title?)` | Add to queue; if `session == idle`, call `advance()` immediately |
 | `advance(userInitiated?)` | Pop next from queue; if empty + `userInitiated=true` → cast `DEFAULT_NEXT` (ping), set `session=idle`, cancel alarm; if empty + not user-initiated → set `session=idle`, cancel alarm, nothing cast; else cast item URL, set `session=active`, set alarm in 30s (settle) |
-| `clear()` | Stop catt_server, cancel alarm, clear queue, reset `session`, `prev`, `next`, `tts`, `channel` to defaults (preserves `app`, `device`, `playlist`) |
+| `clear()` | Stop catt_server, cancel alarm, clear queue, reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` to defaults (preserves `app`, `device`, `playlist`) |
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 30s (settle) |
 | `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `session=active`, schedule alarm |
 | `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration (live stream) → cancel alarm; if PAUSED → poll every 60s; if `getInfo` fails → `getStatus` fallback |
-| `getState()` | Return current state dict (alarm, session, device, channel, app, volume, prev, next, playlist, tts, queue array) — `alarm` is ISO timestamp of next scheduled alarm or `null` |
+| `getState()` | Return current state dict (alarm, session, device, channel, app, volume, prev, next, playlist, tts, sleep_at, queue array) — `alarm` and `sleep_at` are ISO timestamps or `null`. `queue` is `{ position, url }[]` covering all pending items including next-to-play. |
 
 ### HTTP routes (handled inside DO `fetch`)
 
@@ -182,16 +189,21 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 
 | Method | Path | Action |
 |---|---|---|
-| `GET` | `/device/box/state` | Return `getState()` as pretty-printed JSON including scheduled alarm timestamp |
+| `GET` | `/device/box/state` | Return `getState()` as pretty-printed JSON (`Cache-Control: no-store`). Includes `queue` as `{ position, url }[]`, `sleep_at` as ISO string or null. |
+| `GET` | `/device/box/history` | Return last 10 played URLs as `{ position, url, played_at }[]` newest-first (`Cache-Control: no-store`). Excludes TTS and cast_site. |
 | `GET` | `/device/box/play` | `play_toggle` on catt_server |
 | `GET` | `/device/box/prev` | `playPrev()` |
 | `GET` | `/device/box/next` | `advance()` |
-| `GET` | `/device/box/stop` | Stop catt_server + clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts` |
-| `GET` | `/device/box/clear` | Clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts` — no catt_server call |
+| `GET` | `/device/box/stop` | Stop catt_server + clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` |
+| `GET` | `/device/box/clear` | Clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` — no catt_server call |
 | `GET/POST` | `/device/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
 | `GET/POST` | `/device/box/site/:arg` | Stop + clear queue + cancel alarm + set `session=idle`; cast_site URL if http, else TTS (HTML on TV via `/echo?text=`, `tts` command on others) |
 | `GET` | `/device/box/shuffle` | `shuffle(playlist)` using saved `playlist` state key |
-| `GET` | `/device/box/set/:key/:value` | Set a kv state key; setting `device` to an audio-only input (name starts with "mini") auto-resets `app` to `default` |
+| `GET` | `/device/box/rewind/:seconds` | Rewind N seconds on catt_server (default 30) |
+| `GET` | `/device/box/ffwd/:seconds` | Fast-forward N seconds on catt_server (default 30) |
+| `GET` | `/device/box/sleep/:minutes` | Set sleep timer; if session idle, sets alarm directly to `sleep_at` |
+| `GET` | `/device/box/sleep/cancel` | Clear `sleep_at` kv key |
+| `GET` | `/device/box/set/:key/:value` | Set a kv state key; setting `device` to an audio-only input auto-resets `app` to `default` |
 
 ### `/clear` vs `/stop` vs `OnOff`
 
@@ -205,6 +217,7 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 | Resets `next` | Yes | Yes | Yes | Yes |
 | Resets `tts` | Yes | Yes | Yes | Yes |
 | Resets `channel` | Yes | Yes | Yes | Yes |
+| Resets `sleep_at` | Yes | Yes | Yes | Yes |
 | Resets `app` | No | No | Sets `youtube` | No |
 | Resets `device` | No | No | Sets `otv` | No |
 | Resets `playlist` | No | No | No | No |
@@ -282,6 +295,7 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 | `mediaResume` / `mediaPause` | `play_toggle` on catt_server |
 | `mediaStop` | `clear()` |
 | `appSelect` | Update `app` state in DO |
+| `mediaSeekRelative` | Positive `relativePositionMs` → `ffwd`; negative → `rewind` on catt_server (converted ms → seconds) |
 | `setVolume` | `volume` on catt_server (Google 0–10 × 10 → catt 0–100) |
 | `volumeRelative` | `volumeup` or `volumedown` on catt_server (steps × 10%); no stored volume needed |
 
@@ -312,6 +326,9 @@ Returns `{}`.
 | `prev` | DeviceQueue DO (`/box/prev`) | Uses stored `device` key; `device` arg ignored |
 | `next` | DeviceQueue DO (`/box/next`) | Uses stored `device` key; `device` arg ignored |
 | `tts` | DeviceQueue DO (`/box/site/:text`) | All remaining tokens joined as text; uses stored `device` key |
+| `rewind` | DeviceQueue DO (`/box/rewind/:seconds`) | Value is seconds (default 30); uses stored `device` key |
+| `ffwd` | DeviceQueue DO (`/box/ffwd/:seconds`) | Value is seconds (default 30); uses stored `device` key |
+| `sleep` | DeviceQueue DO (`/box/sleep/:arg`) | Value is minutes or `cancel`; `device` arg ignored |
 
 - Slack: no auth (personal workspace); returns plain text response matching the command name
 - Telegram: `X-Telegram-Bot-Api-Secret-Token` header validated against `TELEGRAM_SECRET_TOKEN` secret; skipped if secret unset; always returns `{}`
@@ -338,13 +355,16 @@ Single endpoint for ad-hoc curl usage.
 
 | `command` | `device` | `value` | Behaviour |
 |---|---|---|---|
-| `cast` | input key or name | URL or redirect key | Clear queue + cancel alarm, cast immediately, update `prev`, schedule alarm |
+| `cast` | input key or name | URL or redirect key | Clear queue + cancel alarm, cast immediately, update `prev`, record history, schedule alarm |
 | `cast` | `queue` | URL or redirect key | Enqueue via `getParsedUrl`; plays immediately if idle, appends otherwise |
 | `site` | input key, name, or omit | URL → `cast_site`; plain text → TTS (HTML on TV, spoken on audio device) | Stop + clear queue + cancel alarm |
 | `play` | — | — | Toggle play/pause on catt_server |
-| `stop` | — | — | Stop catt_server + clear queue + cancel alarm |
+| `stop` | — | — | Stop catt_server + clear queue + cancel alarm + reset `sleep_at` |
 | `prev` | — | — | Play previous |
 | `next` | — | — | Advance queue; casts ping if queue empty |
+| `rewind` | — | seconds (default 30) | Rewind on catt_server |
+| `ffwd` | — | seconds (default 30) | Fast-forward on catt_server |
+| `sleep` | — | minutes or `cancel` | Set or cancel sleep timer |
 
 `device` accepts aliases (`k`, `o`, `otv`) or full names (`Mini Kitchen`, `Office TV`). `"queue"` is a special value for `cast` that enqueues instead of casting immediately.
 
