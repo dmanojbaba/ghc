@@ -100,7 +100,7 @@ export const DEFAULT_PREV     = "pingr2";
 export const DEFAULT_NEXT     = "ping";
 export const DEFAULT_SESSION  = "idle";
 export const DEFAULT_TTS      = "Hello World!";
-export const DEFAULT_PLAYLIST = "";
+export const DEFAULT_PLAYLIST = "PLT26XfDyh_oQqoekQItn1eAFqpiWgJQSk";
 export const DEFAULT_SLEEP_AT = "";
 export const DEFAULT_VOLUME   = 50;
 
