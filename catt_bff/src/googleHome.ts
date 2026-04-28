@@ -52,7 +52,7 @@ export async function handleQuery(
         currentApplication:  doSt.app,
         currentInput:        inputKey,
         currentModeSettings: { app_mode: doSt.app },
-        currentVolume:       Number(doSt.volume ?? DEFAULT_VOLUME),
+        currentVolume:       DEFAULT_VOLUME,
         isMuted:             false,
         activityState:       "ACTIVE",
         playbackState:       doSt.session === "active" ? "PLAYING" : "STOPPED",
@@ -187,7 +187,6 @@ async function handleExecute(
         } else if (command === "action.devices.commands.setVolume") {
           const volume = Number(params.volumeLevel ?? 5);
           await castCommand(env.CATT_SERVER_URL, cattDevice, "volume", volume * 10, undefined, env.CATT_SERVER_SECRET);
-          await doGet(stub, "/set/volume/" + volume);
           result = { status: "SUCCESS", states: { online: true, currentVolume: volume } };
 
         } else if (command === "action.devices.commands.mediaSeekRelative") {

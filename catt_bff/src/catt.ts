@@ -8,8 +8,6 @@ export interface CattResponse {
 export interface CattStatusResponse {
   status: string;
   data?: {
-    volume_level?: number;
-    volume_muted?: boolean;
     title?: string;
     player_state?: string;
     content_id?: string;

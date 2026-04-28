@@ -1,7 +1,7 @@
 import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems, getParsedUrl } from "./urlHelper";
 import {
-  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_VOLUME, DEFAULT_CHANNEL,
+  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_CHANNEL,
   resolveDevice, isAudioOnlyInput, getInputKey, DEVICE_ID,
 } from "./devices";
 
@@ -54,7 +54,6 @@ export class DeviceQueue implements DurableObject {
       device:   DEFAULT_DEVICE,
       channel:  DEFAULT_CHANNEL,
       playlist: DEFAULT_PLAYLIST,
-      volume:   String(DEFAULT_VOLUME),
       sleep_at: "",
     };
     return defaults[key] ?? "";
@@ -253,9 +252,6 @@ export class DeviceQueue implements DurableObject {
       try {
         const statusRes = await getStatus(this.serverUrl, device, this.secret);
         const state     = statusRes.data?.player_state ?? "UNKNOWN";
-        if (statusRes.data?.volume_level !== undefined) {
-          this.set("volume", String(Math.round(statusRes.data.volume_level * 100)));
-        }
         if (state === "IDLE" || state === "UNKNOWN") {
           await this.advance();
           return;
@@ -284,7 +280,6 @@ export class DeviceQueue implements DurableObject {
       device:    this.get("device"),
       channel:   this.get("channel"),
       app:       this.get("app"),
-      volume:    Number(this.get("volume")) || DEFAULT_VOLUME,
       prev:      this.get("prev"),
       next:      rows[0]?.url ?? DEFAULT_NEXT,
       playlist:  this.get("playlist"),

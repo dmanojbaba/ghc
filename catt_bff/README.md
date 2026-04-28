@@ -100,7 +100,6 @@ All require `X-API-Key` header.
 | `GET /device/box/sleep/cancel` | Cancel sleep timer. |
 | `GET /device/box/set/device/:key` | Switch active device (e.g. `otv`, `k`). |
 | `GET /device/box/set/playlist/:id` | Set YouTube playlist ID for shuffle. |
-| `GET /device/box/set/volume/:level` | Set stored volume level (0–100). |
 
 ## State response
 
@@ -110,7 +109,6 @@ All require `X-API-Key` header.
   "device": "otv",
   "app": "youtube",
   "channel": "ping",
-  "volume": 50,
   "prev": "https://...",
   "next": "https://...",
   "playlist": "PLxxx",

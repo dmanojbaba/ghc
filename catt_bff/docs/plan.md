@@ -141,6 +141,8 @@ The `kv` table replaces Cloudflare KV from the prototype. The `history` table st
 | `playlist` | `""` | YouTube playlist ID used by `mediaShuffle`; set via `/box/set/playlist/:id` |
 | `sleep_at` | `""` | Unix ms timestamp for sleep timer; empty when unset. Checked in `alarm()` before session guard — fires `clear()` when due even if session is idle. |
 
+Volume is not stored in kv. `getState()` and Google Home QUERY always return `DEFAULT_VOLUME` (50). `setVolume` via Google Home sends the command to catt_server but does not write to kv.
+
 ### State Machine
 
 ```
@@ -181,7 +183,7 @@ IDLE ──(enqueue when idle)──► ACTIVE
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 30s (settle) |
 | `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `session=active`, schedule alarm |
 | `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration (live stream) → cancel alarm; if PAUSED → poll every 60s; if `getInfo` fails → `getStatus` fallback |
-| `getState()` | Return current state dict (alarm, session, device, channel, app, volume, prev, next, playlist, tts, sleep_at, queue array) — `alarm` and `sleep_at` are ISO timestamps or `null`. `queue` is `{ position, url }[]` covering all pending items including next-to-play. |
+| `getState()` | Return current state dict (alarm, session, device, channel, app, prev, next, playlist, tts, sleep_at, queue array) — `alarm` and `sleep_at` are ISO timestamps or `null`. `queue` is `{ position, url }[]` covering all pending items including next-to-play. |
 
 ### HTTP routes (handled inside DO `fetch`)
 
@@ -296,7 +298,7 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 | `mediaStop` | `clear()` |
 | `appSelect` | Update `app` state in DO |
 | `mediaSeekRelative` | Positive `relativePositionMs` → `ffwd`; negative → `rewind` on catt_server (converted ms → seconds) |
-| `setVolume` | `volume` on catt_server (Google 0–10 × 10 → catt 0–100) |
+| `setVolume` | `volume` on catt_server (Google 0–10 × 10 → catt 0–100); not written to kv |
 | `volumeRelative` | `volumeup` or `volumedown` on catt_server (steps × 10%); no stored volume needed |
 
 ### DISCONNECT
