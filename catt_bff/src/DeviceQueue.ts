@@ -361,6 +361,20 @@ export class DeviceQueue implements DurableObject {
         return new Response("ok");
       }
 
+      case "rewind": {
+        const seconds = Number(parts[3] ?? 30);
+        const device = resolveDevice(this.get("device"));
+        await castCommand(this.serverUrl, device, "rewind", seconds, undefined, this.secret);
+        return new Response("ok");
+      }
+
+      case "ffwd": {
+        const seconds = Number(parts[3] ?? 30);
+        const device = resolveDevice(this.get("device"));
+        await castCommand(this.serverUrl, device, "ffwd", seconds, undefined, this.secret);
+        return new Response("ok");
+      }
+
       case "set": {
         const key   = parts[3];
         const value = parts[4] ?? "";

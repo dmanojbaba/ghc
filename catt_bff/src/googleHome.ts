@@ -190,6 +190,15 @@ async function handleExecute(
           await doGet(stub, "/set/volume/" + volume);
           result = { status: "SUCCESS", states: { online: true, currentVolume: volume } };
 
+        } else if (command === "action.devices.commands.mediaSeekRelative") {
+          const seconds = Number(params.relativePositionMs ?? 0) / 1000;
+          if (seconds > 0) {
+            await castCommand(env.CATT_SERVER_URL, cattDevice, "ffwd", Math.abs(seconds), undefined, env.CATT_SERVER_SECRET);
+          } else if (seconds < 0) {
+            await castCommand(env.CATT_SERVER_URL, cattDevice, "rewind", Math.abs(seconds), undefined, env.CATT_SERVER_SECRET);
+          }
+          result = { status: "SUCCESS", states: { online: true } };
+
         } else if (command === "action.devices.commands.volumeRelative") {
           const steps = Number(params.relativeSteps ?? 0);
           if (steps > 0) {

@@ -2,7 +2,7 @@ import { castCommand } from "./catt";
 import { getParsedUrl } from "./urlHelper";
 import { resolveDevice } from "./devices";
 
-const DO_COMMANDS = new Set(["play", "stop", "prev", "next"]);
+const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "rewind", "ffwd"]);
 
 function resolveValue(value: string): string {
   return getParsedUrl(value);

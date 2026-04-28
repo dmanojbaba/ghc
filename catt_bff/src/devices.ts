@@ -53,7 +53,7 @@ export const DEVICES: DeviceDefinition[] = [
       supportPlaybackState: true,
       commandOnlyOnOff: true,
       queryOnlyOnOff: false,
-      transportControlSupportedCommands: ["NEXT", "PREVIOUS", "PAUSE", "STOP", "RESUME", "SHUFFLE"],
+      transportControlSupportedCommands: ["NEXT", "PREVIOUS", "PAUSE", "STOP", "RESUME", "SHUFFLE", "SEEK_RELATIVE"],
       volumeMaxLevel: 10,
       volumeCanMuteAndUnmute: false,
       commandOnlyVolume: true,
