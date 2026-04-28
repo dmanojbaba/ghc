@@ -162,8 +162,8 @@ curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API
 | `/device/box/prev` | Play previous (replays last TTS if `prev=tts`, plays pingr2 if no history) |
 | `/device/box/next` | Advance queue; casts ping if queue empty |
 | `/device/box/stop` | Stop playback on catt_server, clear queue, cancel alarm |
-| `/device/box/clear` | Clear queue + cancel alarm only, no catt_server call |
-| `/device/box/cast/:url` | Enqueue URL |
+| `/device/box/clear` | Clear queue + cancel alarm only, no catt_server call; used before channel changes to ensure immediate playback |
+| `/device/box/cast/:url` | Enqueue URL; plays immediately if idle |
 | `/device/box/site/:arg` | Stop + clear queue + cast_site URL, or TTS text |
 | `/device/box/shuffle` | Shuffle saved playlist |
 | `/device/box/set/:key/:value` | Set state key (e.g. `device`, `app`, `playlist`, `volume`) |

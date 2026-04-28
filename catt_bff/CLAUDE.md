@@ -45,7 +45,7 @@ Google Home / Slack / Telegram / curl
 - **`src/devices.ts`** — Single device (`"box"`), input aliases (`k`=Mini Kitchen, `o`=Mini Office, `b`=Mini Bedroom, `zbk`=Mini ZBK, `tv`=Google TV, `otv`=Office TV), channel list, and defaults.
 - **`src/catt.ts`** — HTTP client for `catt_server`. Attaches `X-Catt-Secret` header.
 - **`src/urlHelper.ts`** — Normalises YouTube URLs (short links, bare IDs, `/embed/`, `/v/`) and resolves bare shortcodes to `https://r.manojbaba.com/r/<key>`.
-- **`src/googleHome.ts`** — Google Home C2C SYNC/QUERY/EXECUTE intent handlers.
+- **`src/googleHome.ts`** — Google Home C2C SYNC/QUERY/EXECUTE intent handlers. `selectChannel` and `relativeChannel` call `/clear` before `/cast` to ensure immediate playback rather than queuing.
 - **`src/integrations.ts`** — Slack slash command + Telegram webhook handlers.
 - **`src/cattHandler.ts`** — Handler for `POST /catt`: routes DO_COMMANDS (`play`, `stop`, `prev`, `next`) to the DO, everything else to the DO's `/catt` sub-route.
 - **`src/oauth.ts`** — Google account-linking stub (returns a random 32-char token, 24 h expiry).
