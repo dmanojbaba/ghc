@@ -52,7 +52,7 @@ Google Home / Slack / Telegram / curl
 
 ### Durable Object state
 
-`kv` table keys: `now`, `prev`, `next`, `app`, `tts`, `device`, `channel`, `playlist`, `volume`. Defaults defined in `devices.ts`.
+`kv` table keys: `session`, `prev`, `next`, `app`, `tts`, `device`, `channel`, `playlist`, `volume`. Defaults defined in `devices.ts`.
 
 Alarm-based polling: after a cast, alarm fires after `CAST_SETTLE_MS` (30 s) to allow the device to settle. Then polls `getInfo` every `HEARTBEAT_MS` (60 s) to detect external stops, switching to `FAST_POLL_MS` (3 s) within the last `APPROACH_WINDOW_MS` (10 s) of the video. Falls back to `getStatus` on `getInfo` error. Live streams (no duration) cancel the alarm immediately — they never end naturally. PAUSED polls every `HEARTBEAT_MS` (60 s) — Chromecast drops paused sessions after ~5 min, which transitions to IDLE naturally. On IDLE, advances the queue.
 

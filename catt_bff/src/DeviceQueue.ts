@@ -112,7 +112,7 @@ export class DeviceQueue implements DurableObject {
   private async clearState(): Promise<void> {
     this.sql.exec("DELETE FROM queue");
     await this.state.storage.deleteAlarm();
-    this.set("now",     DEFAULT_SESSION);
+    this.set("session", DEFAULT_SESSION);
     this.set("prev",    DEFAULT_PREV);
     this.set("next",    DEFAULT_NEXT);
     this.set("tts",     DEFAULT_TTS);

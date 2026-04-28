@@ -100,7 +100,7 @@ wrangler deploy
 
 ### Scheduled jobs (cron)
 
-- **`3 3 * * *`** (3:03am UTC daily): Clears DO state (queue, alarm, `now`/`prev`/`next`/`tts`/`channel`) and resets `app` and `device` to defaults. No catt_server call.
+- **`3 3 * * *`** (3:03am UTC daily): Clears DO state (queue, alarm, `session`/`prev`/`next`/`tts`/`channel`) and resets `app` and `device` to defaults. No catt_server call.
 
 ### API Reference
 
@@ -157,7 +157,7 @@ curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API
 
 | Path | Effect |
 |---|---|
-| `/device/box/state` | Returns current state as pretty-printed JSON (now, device, channel, app, volume, prev, next, playlist, tts, alarm, queue) |
+| `/device/box/state` | Returns current state as pretty-printed JSON (session, device, channel, app, volume, prev, next, playlist, tts, alarm, queue) |
 | `/device/box/play` | Toggle play/pause |
 | `/device/box/prev` | Play previous (replays last TTS if `prev=tts`, plays pingr2 if no history) |
 | `/device/box/next` | Advance queue; casts ping if queue empty |
