@@ -212,6 +212,11 @@ export class DeviceQueue implements DurableObject {
         await this.state.storage.setAlarm(Date.now() + delayMs);
         return;
       }
+      // Live stream (no duration) — never ends naturally, no need to poll
+      if (isPlaying && !duration) {
+        await this.state.storage.deleteAlarm();
+        return;
+      }
     } catch {
       // getInfo failed — fall back to getStatus + regular polling
       try {
