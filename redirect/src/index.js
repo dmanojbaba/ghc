@@ -13,7 +13,9 @@ export default {
   async scheduled(event, env, ctx) {
     switch (event.cron) {
       // update kv for pttv and sun news
-      case "0 6-22 * * *":
+      case "0 6-22 * * *": {
+        const isVideoUrl = (url) => url.startsWith("https://www.youtube.com/watch?v=");
+
         const pttvId = await searchYoutube(
           env,
           "Puthiyathalaimurai Headlines",
@@ -21,7 +23,11 @@ export default {
           "&maxResults=50&order=date&channelId=UCmyKnNRH0wH-r8I-ceP-dsg",
           "Today Headlines"
         );
-        await env.kv.put("pttv", pttvId);
+        if (isVideoUrl(pttvId)) {
+          await env.kv.put("pttv", pttvId);
+        } else {
+          console.error("pttv: searchYoutube returned no video", pttvId);
+        }
 
         const sunId = await searchYoutube(
           env,
@@ -30,9 +36,14 @@ export default {
           "&maxResults=50&order=date&channelId=UCYlh4lH762HvHt6mmiecyWQ",
           "Headlines Now"
         );
-        await env.kv.put("sun", sunId);
+        if (isVideoUrl(sunId)) {
+          await env.kv.put("sun", sunId);
+        } else {
+          console.error("sun: searchYoutube returned no video", sunId);
+        }
 
         break;
+      }
 
       // example second cron
       case "3 3 * * *":
