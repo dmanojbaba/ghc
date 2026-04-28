@@ -245,8 +245,8 @@ export class DeviceQueue implements DurableObject {
 
   async getState(): Promise<Record<string, unknown>> {
     const rows = this.sql
-      .exec<{ position: number; url: string; title: string | null }>(
-        "SELECT position, url, title FROM queue ORDER BY position ASC",
+      .exec<{ position: number; url: string }>(
+        "SELECT position, url FROM queue ORDER BY position ASC",
       )
       .toArray();
 
@@ -263,7 +263,7 @@ export class DeviceQueue implements DurableObject {
       next:      rows[0]?.url ?? DEFAULT_NEXT,
       playlist:  this.get("playlist"),
       tts:       this.get("tts"),
-      queue:     rows.slice(1).map((r) => r.url),
+      queue:     rows.map((r) => ({ position: r.position, url: r.url })),
     };
   }
 
@@ -274,7 +274,12 @@ export class DeviceQueue implements DurableObject {
 
     switch (action) {
       case "state":
-        return new Response(JSON.stringify(await this.getState(), null, 2), { headers: { "content-type": "application/json" } });
+        return new Response(JSON.stringify(await this.getState(), null, 2), {
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+          },
+        });
 
       case "prev":
         await this.playPrev();
