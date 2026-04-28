@@ -46,15 +46,15 @@ export class DeviceQueue implements DurableObject {
 
   private defaultFor(key: string): string {
     const defaults: Record<string, string> = {
-      session:  DEFAULT_SESSION,
-      prev:     DEFAULT_PREV,
-      next:     DEFAULT_NEXT,
       app:      DEFAULT_APP,
-      tts:      DEFAULT_TTS,
-      device:   DEFAULT_DEVICE,
       channel:  DEFAULT_CHANNEL,
+      device:   DEFAULT_DEVICE,
+      next:     DEFAULT_NEXT,
       playlist: DEFAULT_PLAYLIST,
+      prev:     DEFAULT_PREV,
+      session:  DEFAULT_SESSION,
       sleep_at: "",
+      tts:      DEFAULT_TTS,
     };
     return defaults[key] ?? "";
   }
@@ -127,12 +127,12 @@ export class DeviceQueue implements DurableObject {
   private async clearState(): Promise<void> {
     this.sql.exec("DELETE FROM queue");
     await this.state.storage.deleteAlarm();
-    this.set("session", DEFAULT_SESSION);
-    this.set("prev",    DEFAULT_PREV);
-    this.set("next",    DEFAULT_NEXT);
-    this.set("tts",     DEFAULT_TTS);
     this.set("channel", DEFAULT_CHANNEL);
+    this.set("next",    DEFAULT_NEXT);
+    this.set("prev",    DEFAULT_PREV);
+    this.set("session", DEFAULT_SESSION);
     this.set("sleep_at", "");
+    this.set("tts",     DEFAULT_TTS);
   }
 
   async clear(): Promise<void> {
@@ -276,16 +276,16 @@ export class DeviceQueue implements DurableObject {
 
     return {
       alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
+      sleep_at:  sleepAt ? new Date(Number(sleepAt)).toISOString() : null,
       session:   this.get("session"),
       device:    this.get("device"),
-      channel:   this.get("channel"),
       app:       this.get("app"),
+      channel:   this.get("channel"),
       prev:      this.get("prev"),
       next:      rows[0]?.url ?? DEFAULT_NEXT,
       playlist:  this.get("playlist"),
       tts:       this.get("tts"),
       queue:     rows.map((r) => ({ position: r.position, url: r.url })),
-      sleep_at:  sleepAt ? new Date(Number(sleepAt)).toISOString() : null,
     };
   }
 
