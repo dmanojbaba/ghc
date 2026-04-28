@@ -158,7 +158,7 @@ Structure:
 - One handler function per command (15 total, registered in `ACTION_HANDLERS`)
 - `ThreadPoolExecutor` with 4 workers — handlers run off the request thread for timeout support
 - `POST /catt` — checks `X-Catt-Secret` header against `CATT_SERVER_SECRET` env var (skipped if unset); dispatches to handler via executor, wraps errors into structured JSON
-- `main()` with argparse for `--host`, `--port`, `--timeout` (default 30s), `--debug`
+- `main()` with argparse for `--host`, `--port`, `--timeout` (default 45s), `--debug`
 - Structured logging via `logging.basicConfig` — INFO on request received (logs full JSON body including `command`, `device`, `value`), INFO on success, WARNING on client errors, ERROR/EXCEPTION on server errors
 
 ### Authentication

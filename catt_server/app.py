@@ -29,7 +29,7 @@ logging.getLogger("pychromecast.socket_client").setLevel(logging.CRITICAL)
 
 app = Flask(__name__)
 executor = ThreadPoolExecutor(max_workers=4)
-request_timeout = 30
+request_timeout = 45
 
 
 def _ok(data=None):
@@ -300,7 +300,7 @@ def main():
     parser = argparse.ArgumentParser(description="catt REST API server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=5000)
-    parser.add_argument("--timeout", type=int, default=30)
+    parser.add_argument("--timeout", type=int, default=45)
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
     global request_timeout
