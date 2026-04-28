@@ -139,9 +139,9 @@ The `kv` table replaces Cloudflare KV from the prototype. The `history` table st
 | `device` | `otv` | Active input key |
 | `channel` | `ping` | Last selected channel key; used by `relativeChannel` to compute adjacent channel |
 | `playlist` | `""` | YouTube playlist ID used by `mediaShuffle`; set via `/box/set/playlist/:id` |
-| `sleep_at` | `""` | Unix ms timestamp for sleep timer; empty when unset. Checked in `alarm()` before session guard — fires `clear()` when due even if session is idle. |
+| `sleep_at` | `DEFAULT_SLEEP_AT` (`""`) | Unix ms timestamp for sleep timer; empty when unset. Checked in `alarm()` before session guard — fires `clear()` when due even if session is idle. |
 
-Volume is not stored in kv. `getState()` and Google Home QUERY always return `DEFAULT_VOLUME` (50). `setVolume` via Google Home sends the command to catt_server but does not write to kv.
+Volume is not stored in kv and is not returned in `getState()`. `setVolume` via Google Home sends the command to catt_server but does not write to kv. Google Home QUERY returns `DEFAULT_VOLUME` (50) as a static placeholder.
 
 ### State Machine
 

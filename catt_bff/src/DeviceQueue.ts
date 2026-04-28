@@ -1,7 +1,7 @@
 import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems, getParsedUrl } from "./urlHelper";
 import {
-  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_CHANNEL,
+  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_CHANNEL, DEFAULT_SLEEP_AT,
   resolveDevice, isAudioOnlyInput, getInputKey, DEVICE_ID,
 } from "./devices";
 
@@ -53,7 +53,7 @@ export class DeviceQueue implements DurableObject {
       playlist: DEFAULT_PLAYLIST,
       prev:     DEFAULT_PREV,
       session:  DEFAULT_SESSION,
-      sleep_at: "",
+      sleep_at: DEFAULT_SLEEP_AT,
       tts:      DEFAULT_TTS,
     };
     return defaults[key] ?? "";
@@ -131,7 +131,7 @@ export class DeviceQueue implements DurableObject {
     this.set("next",    DEFAULT_NEXT);
     this.set("prev",    DEFAULT_PREV);
     this.set("session", DEFAULT_SESSION);
-    this.set("sleep_at", "");
+    this.set("sleep_at", DEFAULT_SLEEP_AT);
     this.set("tts",     DEFAULT_TTS);
   }
 
@@ -406,7 +406,7 @@ export class DeviceQueue implements DurableObject {
       case "sleep": {
         const arg = parts[3] ?? "";
         if (arg === "cancel") {
-          this.set("sleep_at", "");
+          this.set("sleep_at", DEFAULT_SLEEP_AT);
           // If session is idle there's no polling alarm — nothing to reschedule
           return new Response("ok");
         }

@@ -52,7 +52,7 @@ Google Home / Slack / Telegram / curl
 
 ### Durable Object state
 
-`kv` table keys: `session`, `prev`, `next`, `app`, `tts`, `device`, `channel`, `playlist`, `sleep_at`. Defaults defined in `devices.ts`. Volume is not stored in kv — `state` and Google Home QUERY always return `DEFAULT_VOLUME` (50).
+`kv` table keys: `session`, `prev`, `next`, `app`, `tts`, `device`, `channel`, `playlist`, `sleep_at`. Defaults defined in `devices.ts`. Volume is not stored in kv and is not returned in `state`.
 
 `queue` table: `{ position, url, title, added_at }`. `GET /device/box/state` returns `queue` as `{ position, url }[]` covering all pending items (including the next-to-play item). `next` is also returned as a bare URL for backwards compatibility.
 
