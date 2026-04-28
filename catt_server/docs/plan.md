@@ -103,8 +103,10 @@ Every response — success or error — must be valid JSON with `Content-Type: a
 ```
 catt
 flask>=3.0
-gunicorn>=22.0
 gtts
+gunicorn>=22.0
+pychromecast>=14.0
+zeroconf>=0.132
 ```
 
 ## `catt_server/Dockerfile`

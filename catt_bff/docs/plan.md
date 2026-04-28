@@ -141,15 +141,15 @@ STOPPED ──(enqueue when idle)──► PLAYING
    ▲                                │
    └──(queue empty after advance)───┤
                                     │
-                        cast starts → alarm in 10s (settle)
+                        cast starts → alarm in 30s (settle)
                                     │
                         alarm fires → getInfo (player_state + duration)
                                     │
                     IDLE/UNKNOWN → advance()
                     PLAYING, duration known:
-                        remaining > 10s → reschedule at (remaining - 10s)
+                        remaining > 10s → reschedule at min(remaining - 10s, 60s)
                         remaining ≤ 10s → fast poll every 3s
-                    PLAYING, duration unknown → poll every 10s
+                    PLAYING, duration unknown (live stream) → cancel alarm
                     getInfo fails → getStatus fallback → poll every 10s
 ```
 
@@ -157,19 +157,20 @@ STOPPED ──(enqueue when idle)──► PLAYING
 
 | Constant | Value | Purpose |
 |---|---|---|
-| `CAST_SETTLE_MS` | 10s | Initial delay after cast to allow Chromecast to buffer and report duration |
+| `CAST_SETTLE_MS` | 30s | Initial delay after cast to allow Chromecast to buffer and report duration |
+| `HEARTBEAT_MS` | 60s | Max poll interval between alarm checks; caps the gap so external stops are detected within 60s |
 | `APPROACH_WINDOW_MS` | 10s | How far before end to switch to fast polling |
 | `FAST_POLL_MS` | 3s | Poll interval near end of media |
-| `POLL_INTERVAL_MS` | 10s | Fallback poll interval for live streams or when `getInfo` fails |
+| `POLL_INTERVAL_MS` | 10s | Fallback poll interval when `getInfo` fails |
 
 ### Methods
 
 | Method | Behaviour |
 |---|---|
 | `enqueue(url, title?)` | Add to queue; if `now == stopped`, call `advance()` immediately |
-| `advance(userInitiated?)` | Pop next from queue; if empty + `userInitiated=true` → cast `DEFAULT_NEXT` (ping), set `now=stopped`, cancel alarm; if empty + not user-initiated → set `now=stopped`, cancel alarm, nothing cast; else cast item URL, set `now=playing`, set alarm in 10s (settle) |
+| `advance(userInitiated?)` | Pop next from queue; if empty + `userInitiated=true` → cast `DEFAULT_NEXT` (ping), set `now=stopped`, cancel alarm; if empty + not user-initiated → set `now=stopped`, cancel alarm, nothing cast; else cast item URL, set `now=playing`, set alarm in 30s (settle) |
 | `clear()` | Stop catt_server, cancel alarm, clear queue, reset `now`, `prev`, `next`, `tts`, `channel` to defaults (preserves `app`, `device`, `playlist`) |
-| `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 10s (settle) |
+| `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 30s (settle) |
 | `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `now=playing`, schedule alarm |
 | `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration → 10s poll; if `getInfo` fails → `getStatus` fallback |
 | `getState()` | Return current state dict (alarm, now, device, channel, app, volume, prev, next, playlist, tts, queue array) — `alarm` is ISO timestamp of next scheduled alarm or `null` |
@@ -271,8 +272,8 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 | `OnOff` (off) | Call `/box/stop` (stops catt_server + clears queue + alarm); `app` and `device` left unchanged |
 | `SetModes` | Update `app` state in DO |
 | `SetInput` | Update `device` state in DO |
-| `selectChannel` | Store channel key via `/set/channel/:key`, enqueue channel URL via DO (`/cast/:url`) — URL resolved via `getParsedUrl` |
-| `relativeChannel` | Read `channel` from DO state, compute adjacent channel via `getAdjacentChannel` (wraps around), store via `/set/channel/:key`, enqueue via DO (`/cast/:url`) |
+| `selectChannel` | Call `/clear` (reset queue/alarm, no catt_server call), store channel key via `/set/channel/:key`, then cast immediately via `/cast/:url` — URL resolved via `getParsedUrl` |
+| `relativeChannel` | Read `channel` from DO state, compute adjacent channel via `getAdjacentChannel` (wraps around), call `/clear`, store via `/set/channel/:key`, then cast immediately via `/cast/:url` |
 | `returnChannel` | `playPrev()` |
 | `mediaShuffle` | `shuffle()` using saved `playlist` state key |
 | `mediaPrevious` | `playPrev()` |
