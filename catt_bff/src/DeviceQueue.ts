@@ -27,6 +27,11 @@ export class DeviceQueue implements DurableObject {
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS history (
+        position  INTEGER PRIMARY KEY AUTOINCREMENT,
+        url       TEXT NOT NULL,
+        played_at TEXT NOT NULL
+      );
     `);
   }
 
@@ -61,6 +66,15 @@ export class DeviceQueue implements DurableObject {
 
   private get secret(): string | undefined {
     return this.env.CATT_SERVER_SECRET || undefined;
+  }
+
+  private recordHistory(url: string): void {
+    this.sql.exec("INSERT INTO history (url, played_at) VALUES (?, ?)", url, new Date().toISOString());
+    this.sql.exec(`
+      DELETE FROM history WHERE position NOT IN (
+        SELECT position FROM history ORDER BY position DESC LIMIT 10
+      )
+    `);
   }
 
   private forceDefault(): boolean {
@@ -106,6 +120,7 @@ export class DeviceQueue implements DurableObject {
       force_default: this.forceDefault(),
     }, this.secret);
     this.set("prev", row.url);
+    this.recordHistory(row.url);
     this.set("session", "active");
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
   }
@@ -144,6 +159,7 @@ export class DeviceQueue implements DurableObject {
       this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", url, null, now);
     }
     this.set("prev", first);
+    this.recordHistory(first);
     await castCommand(this.serverUrl, device, "cast", first, {
       force_default: this.forceDefault(),
     }, this.secret);
@@ -357,6 +373,7 @@ export class DeviceQueue implements DurableObject {
               force_default: this.forceDefault(),
             }, this.secret);
             this.set("prev", parsedUrl);
+            this.recordHistory(parsedUrl);
             this.set("session", "active");
             await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
           }
@@ -375,6 +392,20 @@ export class DeviceQueue implements DurableObject {
         const playlistId = this.get("playlist");
         if (playlistId) await this.shuffle(playlistId);
         return new Response("ok");
+      }
+
+      case "history": {
+        const rows = this.sql
+          .exec<{ position: number; url: string; played_at: string }>(
+            "SELECT position, url, played_at FROM history ORDER BY position DESC",
+          )
+          .toArray();
+        return new Response(JSON.stringify(rows, null, 2), {
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+          },
+        });
       }
 
       case "sleep": {
