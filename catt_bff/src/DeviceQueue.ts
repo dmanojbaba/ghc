@@ -218,6 +218,12 @@ export class DeviceQueue implements DurableObject {
         await this.state.storage.deleteAlarm();
         return;
       }
+
+      // Paused — Chromecast drops the session after ~5 min; poll slowly until IDLE
+      if (state === "PAUSED") {
+        await this.state.storage.setAlarm(Date.now() + HEARTBEAT_MS);
+        return;
+      }
     } catch {
       // getInfo failed — fall back to getStatus + regular polling
       try {
