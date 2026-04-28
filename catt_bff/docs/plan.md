@@ -201,6 +201,8 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 | `GET/POST` | `/device/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
 | `GET/POST` | `/device/box/site/:arg` | Stop + clear queue + cancel alarm + set `session=idle`; cast_site URL if http, else TTS (HTML on TV via `/echo?text=`, `tts` command on others) |
 | `GET` | `/device/box/shuffle` | `shuffle(playlist)` using saved `playlist` state key |
+| `GET` | `/device/box/mute/:bool` | `volumemute` on catt_server; `true` = mute (default), `false` = unmute |
+| `GET` | `/device/box/unmute` | `volumemute false` on catt_server; alias for `mute/false` |
 | `GET` | `/device/box/rewind/:seconds` | Rewind N seconds on catt_server (default 30) |
 | `GET` | `/device/box/ffwd/:seconds` | Fast-forward N seconds on catt_server (default 30) |
 | `GET` | `/device/box/sleep/:minutes` | Set sleep timer; if session idle, sets alarm directly to `sleep_at` |
@@ -300,6 +302,7 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 | `mediaSeekRelative` | Positive `relativePositionMs` → `ffwd`; negative → `rewind` on catt_server (converted ms → seconds) |
 | `setVolume` | `volume` on catt_server (Google 0–10 × 10 → catt 0–100); not written to kv |
 | `volumeRelative` | `volumeup` or `volumedown` on catt_server (steps × 10%); no stored volume needed |
+| `mute` | `volumemute` on catt_server with boolean `mute` param; `volumeCanMuteAndUnmute` is `false` so Google Home does not advertise this capability |
 
 ### DISCONNECT
 Returns `{}`.
@@ -323,6 +326,8 @@ Returns `{}`.
 |---|---|---|
 | `cast` | catt_server directly | URL resolved via `getParsedUrl` |
 | `volume` | catt_server directly | Value is int 0–100 |
+| `mute` | DeviceQueue DO (`/box/mute/:bool`) | No value = mute; `false` = unmute; uses stored `device` key |
+| `unmute` | DeviceQueue DO (`/box/unmute`) | Alias for `mute false`; uses stored `device` key |
 | `play` | DeviceQueue DO (`/box/play`) | Uses stored `device` key; `device` arg ignored |
 | `stop` | DeviceQueue DO (`/box/stop`) | Uses stored `device` key; `device` arg ignored |
 | `prev` | DeviceQueue DO (`/box/prev`) | Uses stored `device` key; `device` arg ignored |
@@ -364,6 +369,8 @@ Single endpoint for ad-hoc curl usage.
 | `stop` | — | — | Stop catt_server + clear queue + cancel alarm + reset `sleep_at` |
 | `prev` | — | — | Play previous |
 | `next` | — | — | Advance queue; casts ping if queue empty |
+| `mute` | — | omit or `true` = mute, `false` = unmute | `volumemute` on catt_server |
+| `unmute` | — | — | `volumemute false` on catt_server; alias for `mute` with `value=false` |
 | `rewind` | — | seconds (default 30) | Rewind on catt_server |
 | `ffwd` | — | seconds (default 30) | Fast-forward on catt_server |
 | `sleep` | — | minutes or `cancel` | Set or cancel sleep timer |

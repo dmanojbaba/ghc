@@ -198,6 +198,11 @@ async function handleExecute(
           }
           result = { status: "SUCCESS", states: { online: true } };
 
+        } else if (command === "action.devices.commands.mute") {
+          const muted = Boolean(params.mute ?? true);
+          await castCommand(env.CATT_SERVER_URL, cattDevice, "volumemute", muted, undefined, env.CATT_SERVER_SECRET);
+          result = { status: "SUCCESS", states: { online: true, isMuted: muted } };
+
         } else if (command === "action.devices.commands.volumeRelative") {
           const steps = Number(params.relativeSteps ?? 0);
           if (steps > 0) {

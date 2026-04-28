@@ -2,7 +2,7 @@ import { castCommand } from "./catt";
 import { getParsedUrl } from "./urlHelper";
 import { resolveDevice } from "./devices";
 
-const DO_COMMANDS = new Set(["play", "stop", "prev", "next"]);
+const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute"]);
 
 function resolveValue(value: string): string {
   return getParsedUrl(value);
@@ -37,6 +37,11 @@ async function dispatchCommand(
     await castCommand(env.CATT_SERVER_URL, resolveDevice(device), "volume", Number(rawValue), undefined, env.CATT_SERVER_SECRET);
     return "volume";
   }
+  if (command === "mute") {
+    const muted = (rawValue.trim() || "true") !== "false";
+    await doStub.fetch(new Request(`https://do/device/box/mute/${muted}`));
+    return "mute";
+  }
   await castCommand(env.CATT_SERVER_URL, resolveDevice(device), "cast", resolveValue(rawValue), {
     force_default: true,
   }, env.CATT_SERVER_SECRET);
@@ -49,7 +54,7 @@ export async function handleSlack(request: Request, env: Env, doStub: DurableObj
   const tokens = text.split(/\s+/);
 
   const [command, device = "", ...rest] = tokens;
-  if (!command) return new Response("Usage: <cast|volume|tts|play|stop|prev|next|rewind|ffwd|sleep> [device] [url_or_value]", { status: 200 });
+  if (!command) return new Response("Usage: <cast|volume|mute|unmute|tts|play|stop|prev|next|rewind|ffwd|sleep> [device] [url_or_value]", { status: 200 });
 
   const rawValue = rest.join(" ");
   const result = await dispatchCommand(command, device, rawValue, env, doStub);

@@ -435,6 +435,14 @@ export class DeviceQueue implements DurableObject {
         return new Response("ok");
       }
 
+      case "mute":
+      case "unmute": {
+        const muted = action === "unmute" ? false : parts[3] !== "false";
+        const device = resolveDevice(this.get("device"));
+        await castCommand(this.serverUrl, device, "volumemute", muted, undefined, this.secret);
+        return new Response("ok");
+      }
+
       case "set": {
         const key   = parts[3];
         const value = parts[4] ?? "";

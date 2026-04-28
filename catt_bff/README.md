@@ -23,6 +23,9 @@ Command syntax: `<command> [device] [value]`
 | `cast` | `cast queue https://youtu.be/abc123` | Add to queue instead of casting immediately. |
 | `tts` | `tts otv hello world` | Speak text. On TV devices renders as HTML; on Mini devices uses TTS audio. |
 | `volume` | `volume otv 50` | Set volume 0–100. |
+| `mute` | `mute` | Mute. Always acts on the currently active device. |
+| `mute` | `mute false` | Unmute. Always acts on the currently active device. |
+| `unmute` | `unmute` | Unmute. Alias for `mute false`. Always acts on the currently active device. |
 | `play` | `play` | Toggle play/pause. |
 | `stop` | `stop` | Stop playback and clear queue. |
 | `prev` | `prev` | Replay previous item. |
@@ -32,7 +35,7 @@ Command syntax: `<command> [device] [value]`
 | `sleep` | `sleep 30` | Stop playback after N minutes. |
 | `sleep` | `sleep cancel` | Cancel a pending sleep timer. |
 
-`play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep` always act on the currently active device — the device argument is ignored for these.
+`play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep`, `mute`, `unmute` always act on the currently active device — the device argument is ignored for these.
 
 ## POST /catt
 
@@ -78,6 +81,14 @@ curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "sleep", "value": "30"}'
 curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "sleep", "value": "cancel"}'
+
+# Mute / unmute
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "mute"}'
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "mute", "value": "false"}'
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "unmute"}'
 ```
 
 ## GET /device/box/* endpoints
@@ -94,6 +105,8 @@ All require `X-API-Key` header.
 | `GET /device/box/next` | Skip to next item in queue. |
 | `GET /device/box/cast/:url` | Enqueue a URL. |
 | `GET /device/box/shuffle` | Shuffle the saved YouTube playlist. |
+| `GET /device/box/mute/:bool` | Mute (`true`) or unmute (`false`). Default: mute. |
+| `GET /device/box/unmute` | Unmute. Alias for `mute/false`. |
 | `GET /device/box/rewind/:seconds` | Rewind N seconds (default 30). |
 | `GET /device/box/ffwd/:seconds` | Fast-forward N seconds (default 30). |
 | `GET /device/box/sleep/:minutes` | Stop after N minutes. |
