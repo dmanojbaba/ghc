@@ -33,6 +33,13 @@ function mockYoutubeSearch(items) {
   );
 }
 
+function mockYoutubeVideos(items) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({ json: async () => ({ items }) }))
+  );
+}
+
 beforeEach(() => {
   vi.restoreAllMocks();
 });
@@ -281,16 +288,16 @@ describe("scheduled", () => {
 });
 
 // ---------------------------------------------------------------------------
-// searchYoutube — single-word (video ID) path
+// searchYoutube — single-word path (now goes through YouTube /videos API)
 // ---------------------------------------------------------------------------
 
-describe("GET /r — single-word YouTube ID fallback", () => {
-  it("redirects directly to youtube.com/watch?v= for single-word KV miss", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+describe("GET /r — single-word YouTube API fallback", () => {
+  it("calls YouTube videos API and redirects to result for single-word KV miss", async () => {
+    mockYoutubeVideos([{ id: "abc123", snippet: { title: "Some Video" } }]);
     const env = makeEnv({});
     const res = await worker.fetch(makeRequest("/r/abc123"), env);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(YOUTUBE_BASE + "abc123");
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalled();
   });
 });

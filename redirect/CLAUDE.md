@@ -55,8 +55,8 @@ Single-file Cloudflare Worker (`src/index.js`). URL shortener and redirect servi
 
 ### YouTube search logic (`searchYoutube`)
 
-- Single-word input (no spaces), `raw=false` → returns `youtube.com/watch?v=<id>` directly without an API call
-- Single-word input (no spaces), `raw=true` → looks up the video ID via the YouTube `/videos` API and returns result JSON
-- Multi-word input → calls YouTube Search API, iterates results looking for a title match (exact or `altMatchText` prefix); falls back to first result
+- Single-word input (no spaces) → tries YouTube `/videos` API first (treats input as a video ID); if no result, falls through to Search API
+- Multi-word input → calls YouTube Search API directly
+- Search API: iterates results looking for a title match (exact or `altMatchText` prefix); falls back to first result
 - `raw=false` → returns a YouTube URL string
 - `raw=true` → returns JSON with `result`, `videoUrl`, `videoTitle`; `result` is `"N/total"` (match position) or `"0/total"` (no match found, fell back to first result)

@@ -154,33 +154,28 @@ async function searchYoutube(
 ) {
   const isSingleWord = !searchText.trim().includes(" ");
 
-  if (isSingleWord && !raw) {
-    return "https://www.youtube.com/watch?v=" + searchText.trim();
-  }
-
   if (isSingleWord) {
     const requestByID = `https://www.googleapis.com/youtube/v3/videos?part=snippet&key=${
       env.YOUTUBE_API_KEY
     }&id=${encodeURIComponent(searchText)}${extraParams}`;
     const dataByID = await fetch(requestByID).then((r) => r.json());
 
-    if (dataByID.error !== undefined || dataByID.items.length == 0) {
-      return raw ? JSON.stringify(dataByID, null, 2) : "https://www.youtube.com";
+    if (dataByID.error === undefined && dataByID.items.length > 0) {
+      const videoId = dataByID.items[0].id;
+      const videoTitle = dataByID.items[0].snippet.title;
+      return raw
+        ? JSON.stringify(
+            {
+              result: dataByID.items.length,
+              videoUrl: "https://www.youtube.com/watch?v=" + videoId,
+              videoTitle: videoTitle,
+            },
+            null,
+            2
+          )
+        : "https://www.youtube.com/watch?v=" + videoId;
     }
-
-    const videoId = dataByID.items[0].id;
-    const videoTitle = dataByID.items[0].snippet.title;
-    return raw
-      ? JSON.stringify(
-          {
-            result: dataByID.items.length,
-            videoUrl: "https://www.youtube.com/watch?v=" + videoId,
-            videoTitle: videoTitle,
-          },
-          null,
-          2
-        )
-      : "https://www.youtube.com/watch?v=" + videoId;
+    // not a valid video ID — fall through to search API below
   }
 
   const requestUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&key=${
