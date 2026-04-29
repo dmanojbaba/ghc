@@ -40,8 +40,9 @@ export async function handleOAuthAuth(request: Request): Promise<Response> {
 
 export function handleOAuthToken(): Response {
   return Response.json({
-    token_type:   "bearer",
-    access_token: randomString(32),
-    expires_in:   86400,
+    token_type:    "bearer",
+    access_token:  randomString(32),
+    refresh_token: randomString(32),
+    expires_in:    31536000,
   });
 }
