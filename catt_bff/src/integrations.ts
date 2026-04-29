@@ -1,8 +1,16 @@
 import { castCommand } from "./catt";
 import { getParsedUrl } from "./urlHelper";
-import { resolveDevice } from "./devices";
+import { resolveDevice, INPUT_TO_DEVICE } from "./devices";
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute"]);
+
+function parseTokens(tokens: string[]): { device: string; rawValue: string } {
+  const [second = "", ...rest] = tokens;
+  if (second in INPUT_TO_DEVICE) {
+    return { device: second, rawValue: rest.join(" ") };
+  }
+  return { device: "", rawValue: [second, ...rest].join(" ").trim() };
+}
 
 function resolveValue(value: string): string {
   return getParsedUrl(value);
@@ -53,10 +61,10 @@ export async function handleSlack(request: Request, env: Env, doStub: DurableObj
   const text   = (form.get("text") as string ?? "").trim();
   const tokens = text.split(/\s+/);
 
-  const [command, device = "", ...rest] = tokens;
+  const [command, ...rest] = tokens;
   if (!command) return new Response("Usage: <cast|volume|mute|unmute|tts|play|stop|prev|next|rewind|ffwd|sleep> [device] [url_or_value]", { status: 200 });
 
-  const rawValue = rest.join(" ");
+  const { device, rawValue } = parseTokens(rest);
   const result = await dispatchCommand(command, device, rawValue, env, doStub);
   return new Response(result, { status: 200 });
 }
@@ -74,10 +82,10 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
   const text   = (body.message?.text ?? "").trim();
   const tokens = text.split(/\s+/);
 
-  const [command, device = "", ...rest] = tokens;
+  const [command, ...rest] = tokens;
   if (!command) return Response.json({});
 
-  const rawValue = rest.join(" ");
+  const { device, rawValue } = parseTokens(rest);
   await dispatchCommand(command, device, rawValue, env, doStub);
   return Response.json({});
 }

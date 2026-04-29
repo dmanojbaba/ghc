@@ -40,12 +40,30 @@ export const DEVICES: DeviceDefinition[] = [
         { key: "youtube", names: [{ name_synonym: ["youtube"], lang: "en" }] },
       ],
       availableInputs: [
-        { key: "k", names: [{ name_synonym: ["Mini Kitchen"], lang: "en" }] },
-        { key: "o", names: [{ name_synonym: ["Mini Office"], lang: "en" }] },
-        { key: "b", names: [{ name_synonym: ["Mini Bedroom"], lang: "en" }] },
-        { key: "zbk", names: [{ name_synonym: ["Mini ZBK"], lang: "en" }] },
-        { key: "tv", names: [{ name_synonym: ["Google TV"], lang: "en" }] },
-        { key: "otv", names: [{ name_synonym: ["Office TV"], lang: "en" }] },
+        {
+          key: "k",
+          names: [{ name_synonym: ["Mini Kitchen", "Kitchen"], lang: "en" }],
+        },
+        {
+          key: "o",
+          names: [{ name_synonym: ["Mini Office", "Office"], lang: "en" }],
+        },
+        {
+          key: "b",
+          names: [{ name_synonym: ["Mini Bedroom", "Bedroom"], lang: "en" }],
+        },
+        {
+          key: "zbk",
+          names: [{ name_synonym: ["Mini ZBK", "ZBK"], lang: "en" }],
+        },
+        {
+          key: "tv",
+          names: [{ name_synonym: ["Google TV", "TV"], lang: "en" }],
+        },
+        {
+          key: "otv",
+          names: [{ name_synonym: ["Office TV", "OTV"], lang: "en" }],
+        },
       ],
       commandOnlyInputSelector: false,
       orderedInputs: true,
@@ -109,15 +127,25 @@ export const DEVICES: DeviceDefinition[] = [
   },
 ];
 
-// Maps alias key → catt_server device name
-export const INPUT_TO_DEVICE: Record<string, string> = {
-  k: "Mini Kitchen",
-  o: "Mini Office",
-  b: "Mini Bedroom",
-  zbk: "Mini ZBK",
-  tv: "Google TV",
-  otv: "Office TV",
-};
+// Derived from availableInputs: maps every key and name_synonym → catt_server device name
+export const INPUT_TO_DEVICE: Record<string, string> = Object.fromEntries(
+  DEVICES.flatMap((d) =>
+    (
+      d.attributes.availableInputs as Array<{
+        key: string;
+        names: Array<{ name_synonym: string[] }>;
+      }>
+    ).flatMap((i) => [
+      [i.key, i.names[0].name_synonym[0]],
+      ...i.names.flatMap((n) =>
+        n.name_synonym.map((s) => [
+          s.toLowerCase(),
+          i.names[0].name_synonym[0],
+        ]),
+      ),
+    ]),
+  ),
+);
 
 export const DEFAULT_CHANNEL = "ping";
 export const DEFAULT_DEVICE = "otv";
