@@ -59,7 +59,7 @@ describe("handleOAuthToken", () => {
 
     expect(body.token_type).toBe("bearer");
     expect(typeof body.access_token).toBe("string");
-    expect(body.expires_in).toBe(86400);
+    expect(body.expires_in).toBe(31536000);
   });
 
   it("access_token is 32 chars", async () => {
@@ -68,10 +68,11 @@ describe("handleOAuthToken", () => {
     expect((body.access_token as string).length).toBe(32);
   });
 
-  it("does not include refresh_token", async () => {
+  it("includes a refresh_token", async () => {
     const response = handleOAuthToken();
     const body = await response.json() as Record<string, unknown>;
-    expect(body.refresh_token).toBeUndefined();
+    expect(typeof body.refresh_token).toBe("string");
+    expect((body.refresh_token as string).length).toBe(32);
   });
 
   it("returns a different token on each call", async () => {

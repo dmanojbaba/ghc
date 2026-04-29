@@ -143,7 +143,7 @@ The `kv` table replaces Cloudflare KV from the prototype. The `history` table st
 | `playlist` | `""` | YouTube playlist ID used by `mediaShuffle`; set via `/box/set/playlist/:id` |
 | `sleep_at` | `DEFAULT_SLEEP_AT` (`""`) | Unix ms timestamp for sleep timer; empty when unset. Checked in `alarm()` before session guard — fires `clear()` when due even if session is idle. |
 
-Volume is not stored in kv and is not returned in `getState()`. `setVolume` via Google Home sends the command to catt_server but does not write to kv. Google Home QUERY returns `DEFAULT_VOLUME` (50) as a static placeholder.
+Volume is not stored in kv and is not returned in `getState()`. `setVolume` via Google Home sends the command to catt_server but does not write to kv. Google Home QUERY returns `DEFAULT_VOLUME` (10) as a static placeholder — matches `volumeMaxLevel: 10`.
 
 ### State Machine
 
@@ -270,7 +270,7 @@ Satisfies Google account linking with no real auth. Returns a random 32-char tok
 |---|---|---|
 | `GET` | `/oauth/auth` | Show "Link this service to Google" button; on submit redirect back with code + state |
 | `POST` | `/oauth/auth` | Read `responseurl` from form body, redirect to it |
-| `POST` | `/oauth/token` | Return random `access_token`, `expires_in: 86400` (no `refresh_token`) |
+| `POST` | `/oauth/token` | Return random `access_token`, random `refresh_token`, `expires_in: 31536000` (1 year) |
 
 ---
 
@@ -503,7 +503,7 @@ The `mediaShuffle` EXECUTE intent will read this value and populate the queue.
 | Queue as KV pipe-separated string | SQLite `queue` table with autoincrement |
 | Manual next only | Auto-advance via DO Alarms + smart `getInfo`-based scheduling; `next` uses `advance()` directly (no stop) |
 | No Report State | State reported reactively via QUERY intent only |
-| Random 8-char token, no expiry | Random 32-char token (CSPRNG), `expires_in: 86400`, no `refresh_token` |
+| Random 8-char token, no expiry | Random 32-char token (CSPRNG), `expires_in: 31536000` (1 year), random `refresh_token` |
 | `/gauth`, `/gtoken`, `/gexec`, `/gcatt`, etc. | `/oauth/auth`, `/oauth/token`, `/fulfillment`, `/device/:name/*` |
 | `mediaShuffle` reads `catt` KV key | `mediaShuffle` reads `playlist` kv state key; no prior `stop` — cast preempts playback |
 | No Slack/Telegram | `/slack`, `/telegram` — unified endpoints supporting `cast`, `volume`, `play`, `stop`, `prev`, `next`, `tts` |

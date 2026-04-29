@@ -37,7 +37,7 @@ POST /catt  {command, device?, value?, ...}
      ├── auth check (X-Catt-Secret header vs CATT_SERVER_SECRET env var)
      ├── JSON validation
      ├── command lookup in ACTION_HANDLERS
-     └── executor.submit(handler)  ← ThreadPoolExecutor, 30s timeout
+     └── executor.submit(handler)  ← ThreadPoolExecutor, 45s timeout
               │
               └── setup_cast()  ← catt library (mDNS device discovery)
                        │
@@ -73,10 +73,14 @@ HTTP status codes: 200 OK, 400 validation/user error, 401 unauthorized, 504 time
 - `_ValidationError` → 400
 - `CattUserError` → 400
 - `CattError` → 500
-- `FuturesTimeoutError` (>30s) → 504
+- `FuturesTimeoutError` (>45s) → 504
 - Unhandled exceptions → 500
 
 Non-serialisable types (`UUID`, `datetime`, `date`) are converted to strings by `_serialisable()`.
+
+### Logging
+
+`pychromecast` logger is set to `WARNING` to suppress noisy INFO messages (channel disconnects, app start/stop, mDNS discovery) that fire on every device sleep/reconnect. Errors and warnings still surface.
 
 ### Auth
 
