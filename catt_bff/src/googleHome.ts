@@ -124,7 +124,8 @@ async function handleExecute(
           const newInput = String(params.newInput);
           const key      = getInputKey(DEVICE_ID, newInput, null) ?? newInput;
           await doGet(stub, "/set/device/" + key);
-          const newApp   = isAudioOnlyInput(DEVICE_ID, key) ? DEFAULT_APP : String(doSt.app ?? DEFAULT_APP);
+          const updatedSt = await doState(stub);
+          const newApp    = String(updatedSt.app ?? DEFAULT_APP);
           result = {
             status: "SUCCESS",
             states: {
