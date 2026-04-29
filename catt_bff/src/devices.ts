@@ -40,12 +40,12 @@ export const DEVICES: DeviceDefinition[] = [
         { key: "youtube", names: [{ name_synonym: ["youtube"], lang: "en" }] },
       ],
       availableInputs: [
-        { key: "k",   names: [{ name_synonym: ["Mini Kitchen"],  lang: "en" }] },
-        { key: "o",   names: [{ name_synonym: ["Mini Office"],   lang: "en" }] },
-        { key: "b",   names: [{ name_synonym: ["Mini Bedroom"],  lang: "en" }] },
-        { key: "zbk", names: [{ name_synonym: ["Mini ZBK"],      lang: "en" }] },
-        { key: "tv",  names: [{ name_synonym: ["Google TV"],     lang: "en" }] },
-        { key: "otv", names: [{ name_synonym: ["Office TV"],     lang: "en" }] },
+        { key: "k", names: [{ name_synonym: ["Mini Kitchen"], lang: "en" }] },
+        { key: "o", names: [{ name_synonym: ["Mini Office"], lang: "en" }] },
+        { key: "b", names: [{ name_synonym: ["Mini Bedroom"], lang: "en" }] },
+        { key: "zbk", names: [{ name_synonym: ["Mini ZBK"], lang: "en" }] },
+        { key: "tv", names: [{ name_synonym: ["Google TV"], lang: "en" }] },
+        { key: "otv", names: [{ name_synonym: ["Office TV"], lang: "en" }] },
       ],
       commandOnlyInputSelector: false,
       orderedInputs: true,
@@ -53,24 +53,55 @@ export const DEVICES: DeviceDefinition[] = [
       supportPlaybackState: true,
       commandOnlyOnOff: true,
       queryOnlyOnOff: false,
-      transportControlSupportedCommands: ["NEXT", "PREVIOUS", "PAUSE", "STOP", "RESUME", "SHUFFLE", "SEEK_RELATIVE"],
+      transportControlSupportedCommands: [
+        "NEXT",
+        "PAUSE",
+        "PREVIOUS",
+        "RESUME",
+        "SEEK_RELATIVE",
+        "SHUFFLE",
+        "STOP",
+      ],
       volumeMaxLevel: 10,
       volumeCanMuteAndUnmute: false,
       commandOnlyVolume: true,
       availableChannels: [
-        { key: "ping",    names: ["ping"],          number: "1" },
-        { key: "sun",     names: ["Sun News"],      number: "2" },
-        { key: "pttv",    names: ["Tamil News"],    number: "3" },
-        { key: "london",  names: ["Radio London"],  number: "4" },
-        { key: "dubai",   names: ["Radio Dubai"],   number: "5" },
-        { key: "lime",    names: ["Radio Lime"],    number: "6" },
-        { key: "chennai", names: ["Radio Chennai"], number: "7" },
+        { key: "ping", names: ["ping"], number: "1" },
+        { key: "sun", names: ["Sun News"], number: "2" },
+        {
+          key: "pttv",
+          names: ["Tamil News", "Puthiya Thalaimurai"],
+          number: "3",
+        },
+        {
+          key: "london",
+          names: ["Radio London", "Athavan Radio"],
+          number: "4",
+        },
+        { key: "dubai", names: ["Radio Dubai", "89.4 Tamil FM"], number: "5" },
+        {
+          key: "raja",
+          names: ["Radio Raja", "Radio Ilaiyaraaja"],
+          number: "6",
+        },
+        { key: "lime", names: ["Radio Lime"], number: "7" },
+        {
+          key: "chennai",
+          names: ["Radio Chennai", "Radio Mirchi"],
+          number: "8",
+        },
+        { key: "arr", names: ["Radio ARR", "Radio Rahman"], number: "9" },
       ],
       commandOnlyChannels: true,
       availableToggles: [
         {
           name: "youtube_app",
-          name_values: [{ name_synonym: ["YouTube", "YouTube app", "YouTube mode"], lang: "en" }],
+          name_values: [
+            {
+              name_synonym: ["YouTube", "YouTube app", "YouTube mode"],
+              lang: "en",
+            },
+          ],
         },
       ],
       commandOnlyToggles: false,
@@ -80,24 +111,24 @@ export const DEVICES: DeviceDefinition[] = [
 
 // Maps alias key → catt_server device name
 export const INPUT_TO_DEVICE: Record<string, string> = {
-  k:   "Mini Kitchen",
-  o:   "Mini Office",
-  b:   "Mini Bedroom",
+  k: "Mini Kitchen",
+  o: "Mini Office",
+  b: "Mini Bedroom",
   zbk: "Mini ZBK",
-  tv:  "Google TV",
+  tv: "Google TV",
   otv: "Office TV",
 };
 
-export const DEFAULT_CHANNEL  = "ping";
-export const DEFAULT_DEVICE   = "otv";
-export const DEFAULT_APP      = "default";
-export const DEFAULT_PREV     = "pingr2";
-export const DEFAULT_NEXT     = "ping";
-export const DEFAULT_SESSION  = "idle";
-export const DEFAULT_TTS      = "Hello World!";
+export const DEFAULT_CHANNEL = "ping";
+export const DEFAULT_DEVICE = "otv";
+export const DEFAULT_APP = "default";
+export const DEFAULT_PREV = "pingr2";
+export const DEFAULT_NEXT = "ping";
+export const DEFAULT_SESSION = "idle";
+export const DEFAULT_TTS = "Hello World!";
 export const DEFAULT_PLAYLIST = "PLT26XfDyh_oQqoekQItn1eAFqpiWgJQSk";
 export const DEFAULT_SLEEP_AT = "";
-export const DEFAULT_VOLUME   = 50;
+export const DEFAULT_VOLUME = 50;
 
 export function resolveDevice(input: string): string {
   return INPUT_TO_DEVICE[input] ?? input;
@@ -106,19 +137,31 @@ export function resolveDevice(input: string): string {
 export function isAudioOnlyInput(deviceId: string, inputKey: string): boolean {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
-    const inputs = d.attributes.availableInputs as Array<{ key: string; names: Array<{ name_synonym: string[] }> }>;
+    const inputs = d.attributes.availableInputs as Array<{
+      key: string;
+      names: Array<{ name_synonym: string[] }>;
+    }>;
     for (const i of inputs) {
       if (i.key !== inputKey) continue;
-      return i.names.some((n) => n.name_synonym.some((s) => s.toLowerCase().startsWith("mini")));
+      return i.names.some((n) =>
+        n.name_synonym.some((s) => s.toLowerCase().startsWith("mini")),
+      );
     }
   }
   return false;
 }
 
-export function getAppKey(deviceId: string, input: string, fallback: string): string {
+export function getAppKey(
+  deviceId: string,
+  input: string,
+  fallback: string,
+): string {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
-    const apps = d.attributes.availableApplications as Array<{ key: string; names: Array<{ name_synonym: string[] }> }>;
+    const apps = d.attributes.availableApplications as Array<{
+      key: string;
+      names: Array<{ name_synonym: string[] }>;
+    }>;
     for (const a of apps) {
       if (a.key === input) return a.key;
       for (const n of a.names) {
@@ -131,10 +174,17 @@ export function getAppKey(deviceId: string, input: string, fallback: string): st
   return fallback;
 }
 
-export function getInputKey(deviceId: string, input: string, fallback: string | null): string | null {
+export function getInputKey(
+  deviceId: string,
+  input: string,
+  fallback: string | null,
+): string | null {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
-    const inputs = d.attributes.availableInputs as Array<{ key: string; names: Array<{ name_synonym: string[] }> }>;
+    const inputs = d.attributes.availableInputs as Array<{
+      key: string;
+      names: Array<{ name_synonym: string[] }>;
+    }>;
     for (const i of inputs) {
       if (i.key === input) return i.key;
       for (const n of i.names) {
@@ -147,7 +197,11 @@ export function getInputKey(deviceId: string, input: string, fallback: string | 
   return fallback;
 }
 
-export function getAdjacentInput(deviceId: string, currentKey: string, delta: number): string {
+export function getAdjacentInput(
+  deviceId: string,
+  currentKey: string,
+  delta: number,
+): string {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
     const inputs = d.attributes.availableInputs as Array<{ key: string }>;
@@ -159,11 +213,20 @@ export function getAdjacentInput(deviceId: string, currentKey: string, delta: nu
   return currentKey;
 }
 
-export function getAdjacentChannel(deviceId: string, currentKey: string, delta: number): string {
+export function getAdjacentChannel(
+  deviceId: string,
+  currentKey: string,
+  delta: number,
+): string {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
-    const channels = d.attributes.availableChannels as Array<{ key: string; number: string }>;
-    const sorted = [...channels].sort((a, b) => Number(a.number) - Number(b.number));
+    const channels = d.attributes.availableChannels as Array<{
+      key: string;
+      number: string;
+    }>;
+    const sorted = [...channels].sort(
+      (a, b) => Number(a.number) - Number(b.number),
+    );
     const idx = sorted.findIndex((c) => c.key === currentKey);
     const base = idx === -1 ? 0 : idx;
     const next = (base + delta + sorted.length) % sorted.length;
@@ -172,10 +235,16 @@ export function getAdjacentChannel(deviceId: string, currentKey: string, delta: 
   return currentKey;
 }
 
-export function getChannelCode(deviceId: string, channelNumber: string): string | null {
+export function getChannelCode(
+  deviceId: string,
+  channelNumber: string,
+): string | null {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
-    const channels = d.attributes.availableChannels as Array<{ key: string; number: string }>;
+    const channels = d.attributes.availableChannels as Array<{
+      key: string;
+      number: string;
+    }>;
     for (const c of channels) {
       if (c.number === channelNumber) return c.key;
     }
