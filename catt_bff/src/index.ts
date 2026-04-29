@@ -22,7 +22,7 @@ function getDoStub(env: Env, deviceId: string): DurableObjectStub {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url    = new URL(request.url);
     const path   = url.pathname;
     const method = request.method.toUpperCase();
@@ -66,7 +66,7 @@ export default {
 
     // Slack
     if (path === "/slack" && method === "POST") {
-      return handleSlack(request, env, getDoStub(env, DEVICE_ID));
+      return handleSlack(request, env, ctx, getDoStub(env, DEVICE_ID));
     }
 
     // Telegram

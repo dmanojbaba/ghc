@@ -74,7 +74,7 @@ async function verifySlackSignature(request: Request, env: Env, body: string): P
   return computed === signature;
 }
 
-export async function handleSlack(request: Request, env: Env, doStub: DurableObjectStub): Promise<Response> {
+export async function handleSlack(request: Request, env: Env, ctx: ExecutionContext, doStub: DurableObjectStub): Promise<Response> {
   const body   = await request.text();
   if (!await verifySlackSignature(request, env, body)) {
     return new Response("Unauthorized", { status: 401 });
@@ -84,11 +84,11 @@ export async function handleSlack(request: Request, env: Env, doStub: DurableObj
   const tokens = text.split(/\s+/);
 
   const [command, ...rest] = tokens;
-  if (!command) return new Response("Usage: <cast|volume|mute|unmute|tts|play|stop|prev|next|rewind|ffwd|sleep> [device] [url_or_value]", { status: 200 });
+  if (!command) return new Response("Usage: <command> [device] [value]", { status: 200 });
 
   const { device, rawValue } = parseTokens(rest);
-  const result = await dispatchCommand(command, device, rawValue, env, doStub);
-  return new Response(result, { status: 200 });
+  ctx.waitUntil(dispatchCommand(command, device, rawValue, env, doStub));
+  return new Response("", { status: 200 });
 }
 
 function verifyTelegramSecret(request: Request, env: Env): boolean {
