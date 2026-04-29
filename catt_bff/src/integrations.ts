@@ -1,5 +1,5 @@
 import { castCommand } from "./catt";
-import { resolveDevice, INPUT_TO_DEVICE, DEFAULT_NEXT } from "./devices";
+import { resolveDevice, INPUT_TO_DEVICE } from "./devices";
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute"]);
 
@@ -38,7 +38,13 @@ async function dispatchCommand(
     return "tts";
   }
   if (command === "volume") {
-    await castCommand(env.CATT_SERVER_URL, resolveDevice(device), "volume", Number(rawValue), undefined, env.CATT_SERVER_SECRET);
+    const val = rawValue.trim();
+    if (val === "up" || val === "down") {
+      const device_ = resolveDevice(device);
+      await castCommand(env.CATT_SERVER_URL, device_, `volume${val}`, undefined, undefined, env.CATT_SERVER_SECRET);
+    } else {
+      await castCommand(env.CATT_SERVER_URL, resolveDevice(device), "volume", Number(val), undefined, env.CATT_SERVER_SECRET);
+    }
     return "volume";
   }
   if (command === "mute") {
@@ -46,10 +52,9 @@ async function dispatchCommand(
     await doStub.fetch(new Request(`https://do/device/box/mute/${muted}`));
     return "mute";
   }
-  const castValue = rawValue.trim() || DEFAULT_NEXT;
   await doStub.fetch(new Request("https://do/device/box/catt", {
     method: "POST",
-    body: JSON.stringify({ command: "cast", device, value: castValue }),
+    body: JSON.stringify({ command: "cast", device, value: rawValue.trim() }),
   }));
   return "cast";
 }

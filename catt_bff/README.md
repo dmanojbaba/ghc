@@ -17,25 +17,26 @@ Cloudflare Worker BFF for controlling Chromecast devices. Deployed at `ghc.manoj
 
 Command syntax: `<command> [device] [value]`
 
-| Command | Example | Notes |
-|---|---|---|
-| `cast` | `cast otv https://youtu.be/abc123` | Cast a URL immediately. Accepts YouTube URLs, shortcodes, or full URLs. |
-| `cast` | `cast queue https://youtu.be/abc123` | Add to queue instead of casting immediately. |
-| `tts` | `tts otv hello world` | Speak text. On TV devices renders as HTML; on Mini devices uses TTS audio. |
-| `volume` | `volume otv 50` | Set volume 0–100. |
-| `mute` | `mute` | Mute. Always acts on the currently active device. |
-| `mute` | `mute false` | Unmute. Always acts on the currently active device. |
-| `unmute` | `unmute` | Unmute. Alias for `mute false`. Always acts on the currently active device. |
-| `play` | `play` | Toggle play/pause. |
-| `stop` | `stop` | Stop playback and clear queue. |
-| `prev` | `prev` | Replay previous item. |
-| `next` | `next` | Skip to next item in queue. |
-| `rewind` | `rewind 60` | Rewind N seconds (default 30). |
-| `ffwd` | `ffwd 30` | Fast-forward N seconds (default 30). |
-| `sleep` | `sleep 30` | Stop playback after N minutes. |
-| `sleep` | `sleep cancel` | Cancel a pending sleep timer. |
-
-`play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep`, `mute`, `unmute` always act on the currently active device — the device argument is ignored for these.
+| Command | Example | Device | Notes |
+|---|---|---|---|
+| `cast` | `cast otv https://youtu.be/abc123` | input | Cast a URL immediately. Accepts YouTube URLs, shortcodes, or full URLs. |
+| `cast` | `cast queue https://youtu.be/abc123` | input | Add to queue instead of casting immediately. |
+| `tts` | `tts otv hello world` | active | Speak text. On TV devices renders as HTML; on Mini devices uses TTS audio. |
+| `volume` | `volume otv 50` | input | Set volume 0–100. |
+| `volume` | `volume up` | active | Increase volume by one step. |
+| `volume` | `volume down` | active | Decrease volume by one step. |
+| `mute` | `mute` | active | Mute. |
+| `mute` | `mute false` | active | Unmute. |
+| `unmute` | `unmute` | active | Unmute. Alias for `mute false`. |
+| `play` | `play` | active | Toggle play/pause. |
+| `stop` | `stop` | active | Stop playback and clear queue. |
+| `prev` | `prev` | active | Replay previous item. |
+| `next` | `next` | active | Skip to next item in queue. |
+| `rewind` | `rewind 60` | active | Rewind N seconds (default 30). |
+| `ffwd` | `ffwd 30` | active | Fast-forward N seconds (default 30). |
+| `sleep` | `sleep 30` | active | Stop playback after N minutes. |
+| `sleep` | `sleep cancel` | active | Cancel a pending sleep timer. |
+| `state` | `state` | active | Return current device state. |
 
 ## POST /catt
 

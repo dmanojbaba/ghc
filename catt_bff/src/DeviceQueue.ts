@@ -348,7 +348,7 @@ export class DeviceQueue implements DurableObject {
       case "catt": {
         const body = await request.json() as { command: string; value?: string; device?: string };
         const cmd        = body.command;
-        const val        = body.value?.trim() || DEFAULT_NEXT;
+        const val        = body.value?.trim() ?? "";
         const deviceArg  = body.device ?? "";
 
         if (deviceArg && deviceArg !== "queue") {
@@ -362,10 +362,13 @@ export class DeviceQueue implements DurableObject {
         const device = resolveDevice(this.get("device"));
 
         if (cmd === "cast") {
-          const parsedUrl = getParsedUrl(val);
-          if (deviceArg === "queue") {
-            await this.enqueue(parsedUrl);
+          const hasValue = !!body.value?.trim();
+          if (!hasValue) {
+            await this.advance(true);
+          } else if (deviceArg === "queue") {
+            await this.enqueue(getParsedUrl(val));
           } else {
+            const parsedUrl = getParsedUrl(val);
             this.sql.exec("DELETE FROM queue");
             await this.state.storage.deleteAlarm();
             await castCommand(this.serverUrl, device, "cast", parsedUrl, {
