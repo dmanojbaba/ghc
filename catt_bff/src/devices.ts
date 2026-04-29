@@ -48,7 +48,7 @@ export const DEVICES: DeviceDefinition[] = [
         { key: "otv", names: [{ name_synonym: ["Office TV"],     lang: "en" }] },
       ],
       commandOnlyInputSelector: false,
-      orderedInputs: false,
+      orderedInputs: true,
       supportActivityState: true,
       supportPlaybackState: true,
       commandOnlyOnOff: true,
@@ -145,6 +145,18 @@ export function getInputKey(deviceId: string, input: string, fallback: string | 
     }
   }
   return fallback;
+}
+
+export function getAdjacentInput(deviceId: string, currentKey: string, delta: number): string {
+  for (const d of DEVICES) {
+    if (d.id !== deviceId) continue;
+    const inputs = d.attributes.availableInputs as Array<{ key: string }>;
+    const idx = inputs.findIndex((i) => i.key === currentKey);
+    const base = idx === -1 ? 0 : idx;
+    const next = (base + delta + inputs.length) % inputs.length;
+    return inputs[next].key;
+  }
+  return currentKey;
 }
 
 export function getAdjacentChannel(deviceId: string, currentKey: string, delta: number): string {

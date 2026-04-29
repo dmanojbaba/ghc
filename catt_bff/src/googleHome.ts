@@ -3,7 +3,7 @@ import { getParsedUrl } from "./urlHelper";
 import {
   DEVICES, DEVICE_ID, INPUT_TO_DEVICE,
   DEFAULT_APP, DEFAULT_DEVICE, DEFAULT_VOLUME,
-  getInputKey, getAppKey, getChannelCode, getAdjacentChannel, isAudioOnlyInput,
+  getInputKey, getAppKey, getAdjacentInput, getChannelCode, getAdjacentChannel, isAudioOnlyInput,
 } from "./devices";
 
 function randomString(length = 6): string {
@@ -123,6 +123,25 @@ async function handleExecute(
         } else if (command === "action.devices.commands.SetInput") {
           const newInput = String(params.newInput);
           const key      = getInputKey(DEVICE_ID, newInput, null) ?? newInput;
+          await doGet(stub, "/set/device/" + key);
+          const updatedSt = await doState(stub);
+          const newApp    = String(updatedSt.app ?? DEFAULT_APP);
+          result = {
+            status: "SUCCESS",
+            states: {
+              online: true,
+              currentInput: key,
+              currentApplication: newApp,
+              currentToggleSettings: { youtube_app: newApp === "youtube" },
+            },
+          };
+
+        } else if (
+          command === "action.devices.commands.NextInput" ||
+          command === "action.devices.commands.PreviousInput"
+        ) {
+          const delta  = command === "action.devices.commands.NextInput" ? 1 : -1;
+          const key    = getAdjacentInput(DEVICE_ID, inputKey, delta);
           await doGet(stub, "/set/device/" + key);
           const updatedSt = await doState(stub);
           const newApp    = String(updatedSt.app ?? DEFAULT_APP);

@@ -93,6 +93,7 @@ Default channel on power-on: `ping` (1).
 Helper functions:
 - `getAppKey(deviceId, input, fallback)` — resolves app key or synonym → canonical key; fallback is non-nullable
 - `getInputKey(deviceId, input, fallback)` — resolves alias or display name → key
+- `getAdjacentInput(deviceId, currentKey, delta)` — returns the input key ±delta positions away (wraps around); used by `NextInput`/`PreviousInput`
 - `getChannelCode(deviceId, channelNumber)` — resolves channel number → key
 - `getAdjacentChannel(deviceId, currentKey, delta)` — returns the channel key ±delta positions away (wraps around); used by `relativeChannel`
 - `resolveDevice(input)` — maps input key → catt_server device name
@@ -291,6 +292,7 @@ Calls DO `getState()`, maps to Google state shape. Returns `currentToggleSetting
 | `OnOff` (off) | Call `/box/stop` (stops catt_server + clears queue + alarm); `app` and `device` left unchanged |
 | `SetToggles` | `youtube_app` toggle: `true` → `app=youtube`, `false` → `app=default` in DO |
 | `SetInput` | Update `device` state in DO |
+| `NextInput` / `PreviousInput` | Cycle to adjacent input via `getAdjacentInput` (±1, wraps around); update `device` state in DO |
 | `selectChannel` | Call `/clear` (reset queue/alarm, no catt_server call), store channel key via `/set/channel/:key`, then cast immediately via `/cast/:url` — URL resolved via `getParsedUrl` |
 | `relativeChannel` | Read `channel` from DO state, compute adjacent channel via `getAdjacentChannel` (wraps around), call `/clear`, store via `/set/channel/:key`, then cast immediately via `/cast/:url` |
 | `returnChannel` | `playPrev()` |
