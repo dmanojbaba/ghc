@@ -228,6 +228,7 @@ export class DeviceQueue implements DurableObject {
       }
 
       const isPlaying = state === "PLAYING" || state === "BUFFERING";
+      if (isPlaying) this.set("session", "active");
       if (isPlaying && duration && duration > 0) {
         const remainingMs = (duration - currentTime) * 1000;
         const delayMs     = remainingMs <= APPROACH_WINDOW_MS
@@ -244,6 +245,7 @@ export class DeviceQueue implements DurableObject {
 
       // Paused — Chromecast drops the session after ~5 min; poll slowly until IDLE
       if (state === "PAUSED") {
+        this.set("session", "paused");
         await this.state.storage.setAlarm(Date.now() + HEARTBEAT_MS);
         return;
       }

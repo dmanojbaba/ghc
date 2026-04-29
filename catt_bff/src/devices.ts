@@ -115,6 +115,22 @@ export function isAudioOnlyInput(deviceId: string, inputKey: string): boolean {
   return false;
 }
 
+export function getAppKey(deviceId: string, input: string, fallback: string): string {
+  for (const d of DEVICES) {
+    if (d.id !== deviceId) continue;
+    const apps = d.attributes.availableApplications as Array<{ key: string; names: Array<{ name_synonym: string[] }> }>;
+    for (const a of apps) {
+      if (a.key === input) return a.key;
+      for (const n of a.names) {
+        for (const syn of n.name_synonym) {
+          if (syn.toLowerCase() === input.toLowerCase()) return a.key;
+        }
+      }
+    }
+  }
+  return fallback;
+}
+
 export function getInputKey(deviceId: string, input: string, fallback: string | null): string | null {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;

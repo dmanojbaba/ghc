@@ -3,7 +3,7 @@ import { getParsedUrl } from "./urlHelper";
 import {
   DEVICES, DEVICE_ID, INPUT_TO_DEVICE,
   DEFAULT_APP, DEFAULT_DEVICE, DEFAULT_VOLUME,
-  getInputKey, getChannelCode, getAdjacentChannel, isAudioOnlyInput,
+  getInputKey, getAppKey, getChannelCode, getAdjacentChannel, isAudioOnlyInput,
 } from "./devices";
 
 function randomString(length = 6): string {
@@ -49,13 +49,13 @@ export async function handleQuery(
       states[device.id] = {
         online:              true,
         on:                  true,
-        currentApplication:  doSt.app,
+        currentApplication:  String(doSt.app ?? DEFAULT_APP),
         currentInput:        inputKey,
         currentToggleSettings: { youtube_app: doSt.app === "youtube" },
         currentVolume:       DEFAULT_VOLUME,
         isMuted:             false,
         activityState:       "ACTIVE",
-        playbackState:       doSt.session === "active" ? "PLAYING" : "STOPPED",
+        playbackState:       doSt.session === "active" ? "PLAYING" : doSt.session === "paused" ? "PAUSED" : "STOPPED",
       };
     } else {
       states[device.id] = { online: true, on: true };
@@ -182,7 +182,8 @@ async function handleExecute(
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.appSelect") {
-          const app = String(params.newApplication ?? DEFAULT_APP);
+          const raw = String(params.newApplication ?? params.newApplicationName ?? DEFAULT_APP);
+          const app = getAppKey(DEVICE_ID, raw, DEFAULT_APP);
           await doGet(stub, "/set/app/" + app);
           result = { status: "SUCCESS", states: { online: true, currentApplication: app } };
 
