@@ -30,7 +30,7 @@ export const DEVICES: DeviceDefinition[] = [
       name: "playground tv",
       nicknames: ["smart tv", "smart box", "google box", "googlebox"],
     },
-    willReportState: true,
+    willReportState: false,
     roomHint: "playground",
     customData: {},
     deviceInfo: {},
@@ -128,7 +128,7 @@ export const DEFAULT_SESSION = "idle";
 export const DEFAULT_TTS = "Hello World!";
 export const DEFAULT_PLAYLIST = "PLT26XfDyh_oQqoekQItn1eAFqpiWgJQSk";
 export const DEFAULT_SLEEP_AT = "";
-export const DEFAULT_VOLUME = 50;
+export const DEFAULT_VOLUME = 10;
 
 export function resolveDevice(input: string): string {
   return INPUT_TO_DEVICE[input] ?? input;
