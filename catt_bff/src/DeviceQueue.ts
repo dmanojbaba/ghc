@@ -277,11 +277,11 @@ export class DeviceQueue implements DurableObject {
     const sleepAt = this.get("sleep_at");
 
     return {
-      alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
-      sleep_at:  sleepAt ? new Date(Number(sleepAt)).toISOString() : null,
-      session:   this.get("session"),
       device:    this.get("device"),
       app:       this.get("app"),
+      session:   this.get("session"),
+      alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
+      sleep_at:  sleepAt ? new Date(Number(sleepAt)).toISOString() : null,
       channel:   this.get("channel"),
       prev:      this.get("prev"),
       next:      rows[0]?.url ?? DEFAULT_NEXT,
