@@ -4,6 +4,7 @@ interface Env {
   CATT_SERVER_URL: string;
   DEVICE_QUEUE: DurableObjectNamespace;
   SLACK_SIGNING_SECRET: string;
+  TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_SECRET_TOKEN: string;
   YOUTUBE_API_KEY: string;
 }

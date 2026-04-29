@@ -86,6 +86,12 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
   const [command, ...rest] = tokens;
   if (!command) return new Response("Usage: <command> [device] [value]", { status: 200 });
 
+  if (command === "state") {
+    const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+    const json = await res.json();
+    return new Response(JSON.stringify(json, null, 2), { status: 200 });
+  }
+
   const { device, rawValue } = parseTokens(rest);
   ctx.waitUntil(dispatchCommand(command, device, rawValue, env, doStub));
   return new Response("", { status: 200 });
@@ -97,15 +103,31 @@ function verifyTelegramSecret(request: Request, env: Env): boolean {
   return request.headers.get("X-Telegram-Bot-Api-Secret-Token") === secret;
 }
 
+async function sendTelegramMessage(token: string, chatId: number, text: string): Promise<void> {
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
+
 export async function handleTelegram(request: Request, env: Env, doStub: DurableObjectStub): Promise<Response> {
   if (!verifyTelegramSecret(request, env)) return Response.json({}, { status: 401 });
 
-  const body   = await request.json() as { message?: { text?: string } };
-  const text   = (body.message?.text ?? "").trim();
-  const tokens = text.split(/\s+/);
+  const body    = await request.json() as { message?: { text?: string; chat?: { id: number } } };
+  const text    = (body.message?.text ?? "").trim();
+  const chatId  = body.message?.chat?.id;
+  const tokens  = text.split(/\s+/);
 
   const [command, ...rest] = tokens;
   if (!command) return Response.json({});
+
+  if (command === "state" && chatId && env.TELEGRAM_BOT_TOKEN) {
+    const res   = await doStub.fetch(new Request("https://do/device/box/state"));
+    const json  = await res.json();
+    await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2));
+    return Response.json({});
+  }
 
   const { device, rawValue } = parseTokens(rest);
   await dispatchCommand(command, device, rawValue, env, doStub);

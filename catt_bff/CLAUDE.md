@@ -46,7 +46,7 @@ Google Home / Slack / Telegram / curl
 - **`src/catt.ts`** — HTTP client for `catt_server`. Attaches `X-Catt-Secret` header.
 - **`src/urlHelper.ts`** — Normalises YouTube URLs (short links, bare IDs, `/embed/`, `/v/`) and resolves bare strings to `https://r.manojbaba.com/r/<encoded-key>`. Bare strings (non-URL, non-http) are `encodeURIComponent`-encoded before appending to `BASE_REDIRECT` so multi-word search queries survive the redirect worker's `decodeURIComponent`.
 - **`src/googleHome.ts`** — Google Home C2C SYNC/QUERY/EXECUTE intent handlers. QUERY maps `session` kv (`"active"`/`"paused"`/`"idle"`) to `playbackState` (`"PLAYING"`/`"PAUSED"`/`"STOPPED"`), and falls back `currentApplication` to `DEFAULT_APP` when unset. `selectChannel` and `relativeChannel` call `/clear` before `/cast` to ensure immediate playback rather than queuing. `NextInput`/`PreviousInput` use `getAdjacentInput` to cycle through ordered inputs. `appSelect` resolves `newApplication` or `newApplicationName` via `getAppKey`. `appInstall` and `appSearch` search YouTube via the redirect worker (`/r/<encoded-query>`) and cast immediately. `mediaSeekRelative` maps positive `relativePositionMs` to `ffwd` and negative to `rewind` on `catt_server`. `mute` sends `volumemute` to `catt_server` (`volumeCanMuteAndUnmute` is `false` so Google Home does not advertise it).
-- **`src/integrations.ts`** — Slack slash command + Telegram webhook handlers. Slack requests are authenticated via HMAC-SHA256 signing secret (`SLACK_SIGNING_SECRET`) checked against `X-Slack-Signature` header — exempt from API key check. Telegram requests are validated via `X-Telegram-Bot-Api-Secret-Token`. Supported commands: `cast`, `volume`, `mute`, `unmute`, `tts`, `play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep`. Token layout: `<command> [device] [value]`. The `device` token is optional — if the second token is not a known `INPUT_TO_DEVICE` entry (short alias, full name, or synonym), it is folded into the value and the default device is used (e.g. `cast oh maria` → device=default, value=`"oh maria"`; `cast kitchen oh maria` → device=Mini Kitchen, value=`"oh maria"`). `rewind`, `ffwd`, and `sleep` route through the DO with the value appended to the URL path; the value falls back to the `device` token if no explicit value is given (e.g. `rewind 60` puts `60` in the device slot, which is caught by the fallback).
+- **`src/integrations.ts`** — Slack slash command + Telegram webhook handlers. Slack requests are authenticated via HMAC-SHA256 signing secret (`SLACK_SIGNING_SECRET`) checked against `X-Slack-Signature` header — exempt from API key check. Telegram requests are validated via `X-Telegram-Bot-Api-Secret-Token`. Supported commands: `cast`, `volume`, `mute`, `unmute`, `tts`, `play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep`, `state`. Token layout: `<command> [device] [value]`. The `device` token is optional — if the second token is not a known `INPUT_TO_DEVICE` entry (short alias, full name, or synonym), it is folded into the value and the default device is used (e.g. `cast oh maria` → device=default, value=`"oh maria"`; `cast kitchen oh maria` → device=Mini Kitchen, value=`"oh maria"`). `rewind`, `ffwd`, and `sleep` route through the DO with the value appended to the URL path; the value falls back to the `device` token if no explicit value is given (e.g. `rewind 60` puts `60` in the device slot, which is caught by the fallback). `state` returns the DO state JSON synchronously — for Slack it appears in the response body; for Telegram it calls `sendMessage` via `TELEGRAM_BOT_TOKEN` to send it back to the chat.
 - **`src/cattHandler.ts`** — Handler for `POST /catt`: routes `DO_COMMANDS` (`play`, `stop`, `prev`, `next`) directly to the DO; routes `DO_VALUE_COMMANDS` (`rewind`, `ffwd`, `sleep`) to the DO with the `value` field appended to the URL path; routes everything else to the DO's `/catt` sub-route.
 - **`src/oauth.ts`** — Google account-linking stub (returns random 32-char `access_token` and `refresh_token`, 1-year expiry).
 
@@ -75,10 +75,17 @@ When switching to an audio-only input (Mini devices), `app` is always reset to `
 | `CATT_API_KEY` | Inbound auth for all non-Google routes |
 | `CATT_SERVER_SECRET` | Passed to catt_server as `X-Catt-Secret` |
 | `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
+| `TELEGRAM_BOT_TOKEN` | Bot token for sending replies via Telegram `sendMessage` API |
 | `TELEGRAM_SECRET_TOKEN` | Validates Telegram webhook requests |
 | `SLACK_SIGNING_SECRET` | Validates Slack slash command requests (HMAC-SHA256) |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 (playlist shuffle) |
 
 ## Testing conventions
 
-Tests use Vitest with `vi.stubGlobal("fetch", ...)` to mock outbound HTTP — no integration tests. Test files live in `src/tests/`.
+Tests use Vitest with `vi.stubGlobal("fetch", ...)` to mock outbound HTTP — no integration tests. Test files live in `src/tests/`:
+
+| File | Covers |
+|---|---|
+| `urlHelper.test.ts` | URL normalisation, YouTube URL parsing, playlist item fetching |
+| `oauth.test.ts` | OAuth auth flow, token shape and uniqueness |
+| `integrations.test.ts` | Slack signature verification, `ctx.waitUntil` immediate response, `state` synchronous reply, device token parsing |

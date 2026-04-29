@@ -1,0 +1,182 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { handleSlack } from "../integrations";
+
+const SIGNING_SECRET = "test-signing-secret";
+const TIMESTAMP = "1234567890";
+
+async function makeSlackSignature(secret: string, timestamp: string, body: string): Promise<string> {
+  const baseString = `v0:${timestamp}:${body}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(baseString));
+  return "v0=" + Array.from(new Uint8Array(mac)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function makeEnv(overrides: Partial<Env> = {}): Env {
+  return {
+    CATT_API_KEY: "api-key",
+    CATT_SERVER_SECRET: "server-secret",
+    CATT_SERVER_URL: "https://catt.example.com",
+    SLACK_SIGNING_SECRET: SIGNING_SECRET,
+    TELEGRAM_BOT_TOKEN: "test-bot-token",
+    TELEGRAM_SECRET_TOKEN: "",
+    YOUTUBE_API_KEY: "",
+    DEVICE_QUEUE: {} as DurableObjectNamespace,
+    ...overrides,
+  };
+}
+
+function makeCtx(): ExecutionContext {
+  return { waitUntil: vi.fn(), passThroughOnException: vi.fn(), props: {} } as unknown as ExecutionContext;
+}
+
+function makeDoStub(): DurableObjectStub {
+  return { fetch: vi.fn(async () => new Response("ok")) } as unknown as DurableObjectStub;
+}
+
+async function makeSlackRequest(text: string, env: Env): Promise<Request> {
+  const body = new URLSearchParams({ text }).toString();
+  const sig = await makeSlackSignature(env.SLACK_SIGNING_SECRET, TIMESTAMP, body);
+  return new Request("https://ghc.manojbaba.com/slack", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "X-Slack-Request-Timestamp": TIMESTAMP,
+      "X-Slack-Signature": sig,
+    },
+    body,
+  });
+}
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+  vi.restoreAllMocks();
+});
+
+describe("handleSlack — signature verification", () => {
+  it("returns 401 for invalid signature", async () => {
+    const body = new URLSearchParams({ text: "play" }).toString();
+    const request = new Request("https://ghc.manojbaba.com/slack", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Slack-Request-Timestamp": TIMESTAMP,
+        "X-Slack-Signature": "v0=invalidsignature",
+      },
+      body,
+    });
+    const res = await handleSlack(request, makeEnv(), makeCtx(), makeDoStub());
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for missing signature", async () => {
+    const body = new URLSearchParams({ text: "play" }).toString();
+    const request = new Request("https://ghc.manojbaba.com/slack", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    const res = await handleSlack(request, makeEnv(), makeCtx(), makeDoStub());
+    expect(res.status).toBe(401);
+  });
+
+  it("passes through when SLACK_SIGNING_SECRET is not set", async () => {
+    const body = new URLSearchParams({ text: "play" }).toString();
+    const request = new Request("https://ghc.manojbaba.com/slack", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    const res = await handleSlack(request, makeEnv({ SLACK_SIGNING_SECRET: "" }), makeCtx(), makeDoStub());
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts valid signature", async () => {
+    const env = makeEnv();
+    const request = await makeSlackRequest("play", env);
+    const res = await handleSlack(request, env, makeCtx(), makeDoStub());
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("handleSlack — response", () => {
+  it("returns 200 immediately without awaiting command", async () => {
+    const env = makeEnv();
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("cast believer", env);
+    const res = await handleSlack(request, env, ctx, makeDoStub());
+    expect(res.status).toBe(200);
+    expect(ctx.waitUntil).toHaveBeenCalledOnce();
+  });
+
+  it("state returns DO state JSON synchronously", async () => {
+    const env = makeEnv();
+    const ctx = makeCtx();
+    const state = { session: "idle", app: "default", device: "otv" };
+    const stub = { fetch: vi.fn(async () => new Response(JSON.stringify(state))) } as unknown as DurableObjectStub;
+    const request = await makeSlackRequest("state", env);
+    const res = await handleSlack(request, env, ctx, stub);
+    expect(res.status).toBe(200);
+    expect(ctx.waitUntil).not.toHaveBeenCalled();
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.session).toBe("idle");
+    expect(body.device).toBe("otv");
+  });
+
+  it("returns usage message when no command given", async () => {
+    const env = makeEnv();
+    const request = await makeSlackRequest("", env);
+    const res = await handleSlack(request, env, makeCtx(), makeDoStub());
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("command");
+  });
+});
+
+async function getCastBody(mockFetch: ReturnType<typeof vi.fn>): Promise<Record<string, unknown>> {
+  const call = mockFetch.mock.calls[0];
+  const body = await (call[1] as RequestInit).body;
+  return JSON.parse(body as string);
+}
+
+describe("handleSlack — device token parsing", () => {
+  it("treats known alias as device", async () => {
+    const env = makeEnv();
+    const mockFetch = vi.fn(async () => new Response("{}"));
+    vi.stubGlobal("fetch", mockFetch);
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("cast k believer", env);
+    await handleSlack(request, env, ctx, makeDoStub());
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const body = await getCastBody(mockFetch);
+    expect(body.device).toBe("Mini Kitchen");
+  });
+
+  it("treats unknown second token as part of value", async () => {
+    const env = makeEnv();
+    const mockFetch = vi.fn(async () => new Response("{}"));
+    vi.stubGlobal("fetch", mockFetch);
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("cast oh maria", env);
+    await handleSlack(request, env, ctx, makeDoStub());
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const body = await getCastBody(mockFetch);
+    expect(body.value).toContain("oh%20maria");
+  });
+
+  it("treats full name as device", async () => {
+    const env = makeEnv();
+    const mockFetch = vi.fn(async () => new Response("{}"));
+    vi.stubGlobal("fetch", mockFetch);
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("cast kitchen believer", env);
+    await handleSlack(request, env, ctx, makeDoStub());
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const body = await getCastBody(mockFetch);
+    expect(body.device).toBe("Mini Kitchen");
+  });
+});
