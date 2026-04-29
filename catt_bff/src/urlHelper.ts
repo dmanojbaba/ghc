@@ -12,8 +12,8 @@ export function getParsedUrl(url: string, ytVideoId = false, ytPlaylist = false)
   try {
     parsed = new URL(url);
   } catch {
-    // not a valid URL — treat as KV key
-    return BASE_REDIRECT + url;
+    // not a valid URL — treat as KV key or search query
+    return BASE_REDIRECT + encodeURIComponent(url);
   }
 
   if (parsed.hostname === "r.manojbaba.com") {
@@ -48,7 +48,7 @@ export function getParsedUrl(url: string, ytVideoId = false, ytPlaylist = false)
     return url;
   }
 
-  return BASE_REDIRECT + url;
+  return BASE_REDIRECT + encodeURIComponent(url);
 }
 
 export async function getPlaylistItems(

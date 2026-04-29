@@ -91,6 +91,7 @@ Default channel on power-on: `ping` (1).
 `INPUT_TO_DEVICE` maps input key → full catt_server device name string.
 
 Helper functions:
+- `getAppKey(deviceId, input, fallback)` — resolves app key or synonym → canonical key; fallback is non-nullable
 - `getInputKey(deviceId, input, fallback)` — resolves alias or display name → key
 - `getChannelCode(deviceId, channelNumber)` — resolves channel number → key
 - `getAdjacentChannel(deviceId, currentKey, delta)` — returns the channel key ±delta positions away (wraps around); used by `relativeChannel`
@@ -131,7 +132,7 @@ The `kv` table replaces Cloudflare KV from the prototype. The `history` table st
 
 | Key | Default | Description |
 |---|---|---|
-| `session` | `idle` | `active` or `idle` |
+| `session` | `idle` | `active` (playing), `paused` (paused), or `idle` (stopped/default) |
 | `prev` | `pingr2` | Last played URL (for repeat) |
 | `next` | `ping` | Not read from kv — `getState()` derives next from the queue table directly; kv value is a legacy default only |
 | `app` | `default` | `default` or `youtube` — controls `force_default` |
@@ -159,7 +160,7 @@ IDLE ──(enqueue when idle)──► ACTIVE
                        remaining > 10s → reschedule at min(remaining - 10s, 60s)
                        remaining ≤ 10s → fast poll every 3s
                    PLAYING, duration unknown (live stream) → cancel alarm
-                   PAUSED → poll every 60s (Chromecast drops session after ~5 min → IDLE)
+                   PAUSED → set session=paused, poll every 60s (Chromecast drops session after ~5 min → IDLE)
                    getInfo fails → getStatus fallback → poll every 10s
 ```
 
@@ -182,7 +183,7 @@ IDLE ──(enqueue when idle)──► ACTIVE
 | `clear()` | Stop catt_server, cancel alarm, clear queue, reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` to defaults (preserves `app`, `device`, `playlist`) |
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 30s (settle) |
 | `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `session=active`, schedule alarm |
-| `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if playing with known duration → smart schedule; if playing without duration (live stream) → cancel alarm; if PAUSED → poll every 60s; if `getInfo` fails → `getStatus` fallback |
+| `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if PLAYING/BUFFERING → set `session=active`, smart schedule; if playing without duration (live stream) → cancel alarm; if PAUSED → set `session=paused`, poll every 60s; if `getInfo` fails → `getStatus` fallback |
 | `getState()` | Return current state dict (alarm, session, device, channel, app, prev, next, playlist, tts, sleep_at, queue array) — `alarm` and `sleep_at` are ISO timestamps or `null`. `queue` is `{ position, url }[]` covering all pending items including next-to-play. |
 
 ### HTTP routes (handled inside DO `fetch`)
@@ -242,7 +243,7 @@ Resolution order for `getParsedUrl`:
 4. `youtube.com/watch`, `/embed/`, `/v/` → extract video ID
 5. `youtube.com` + `ytPlaylist=true` → extract `list` param
 6. Starts with `http` → return as-is
-7. Bare string → prepend `BASE_REDIRECT` (`https://r.manojbaba.com/r/`)
+7. Bare string → `encodeURIComponent` + prepend `BASE_REDIRECT` (`https://r.manojbaba.com/r/<encoded>`) — encoding required so multi-word queries survive the redirect worker's `decodeURIComponent`
 
 `getPlaylistItems` calls YouTube Data API v3, returns `{ first, rest }` where `first` is the first video URL and `rest` is an array of remaining URLs.
 
@@ -280,7 +281,7 @@ Single endpoint `POST /fulfillment`.
 Returns `DEVICES` from `devices.ts`.
 
 ### QUERY
-Calls DO `getState()`, maps to Google state shape. Returns `currentToggleSettings: { youtube_app: bool }` derived from `app` kv key (`youtube` → `true`, `default` → `false`).
+Calls DO `getState()`, maps to Google state shape. Returns `currentToggleSettings: { youtube_app: bool }` derived from `app` kv key (`youtube` → `true`, `default` → `false`). Returns `currentApplication` with fallback to `DEFAULT_APP` when unset. Maps `session` to `playbackState`: `active` → `PLAYING`, `paused` → `PAUSED`, `idle` → `STOPPED`.
 
 ### EXECUTE — Command Mapping
 
@@ -298,7 +299,8 @@ Calls DO `getState()`, maps to Google state shape. Returns `currentToggleSetting
 | `mediaNext` | `advance()` |
 | `mediaResume` / `mediaPause` | `play_toggle` on catt_server |
 | `mediaStop` | `clear()` |
-| `appSelect` | Update `app` state in DO |
+| `appSelect` | Resolve `newApplication` or `newApplicationName` via `getAppKey`; update `app` state in DO |
+| `appInstall` / `appSearch` | Search YouTube via redirect worker (`/r/<encoded-query>`) using `newApplicationName ?? newApplication`; call `/clear` then cast immediately |
 | `mediaSeekRelative` | Positive `relativePositionMs` → `ffwd`; negative → `rewind` on catt_server (converted ms → seconds) |
 | `setVolume` | `volume` on catt_server (Google 0–10 × 10 → catt 0–100); not written to kv |
 | `volumeRelative` | `volumeup` or `volumedown` on catt_server (steps × 10%); no stored volume needed |

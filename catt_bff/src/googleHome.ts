@@ -187,6 +187,18 @@ async function handleExecute(
           await doGet(stub, "/set/app/" + app);
           result = { status: "SUCCESS", states: { online: true, currentApplication: app } };
 
+        } else if (
+          command === "action.devices.commands.appInstall" ||
+          command === "action.devices.commands.appSearch"
+        ) {
+          const query = String(params.newApplicationName ?? params.newApplication ?? "");
+          if (query) {
+            await doGet(stub, "/clear");
+            await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(query)));
+          }
+
+          result = { status: "SUCCESS", states: { online: true } };
+
         } else if (command === "action.devices.commands.setVolume") {
           const volume = Number(params.volumeLevel ?? 5);
           await castCommand(env.CATT_SERVER_URL, cattDevice, "volume", volume * 10, undefined, env.CATT_SERVER_SECRET);
