@@ -23,9 +23,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# pychromecast background reconnect threads log AssertionError from zeroconf
-# as ERROR when a device goes to sleep. These are self-recovering and not actionable.
-logging.getLogger("pychromecast.socket_client").setLevel(logging.CRITICAL)
+# pychromecast logs are noisy (reconnects, app start/stop, mDNS discovery) and not actionable.
+logging.getLogger("pychromecast").setLevel(logging.WARNING)
 
 app = Flask(__name__)
 executor = ThreadPoolExecutor(max_workers=4)
