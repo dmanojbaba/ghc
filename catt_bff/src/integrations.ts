@@ -71,6 +71,8 @@ async function verifySlackSignature(request: Request, env: Env, body: string): P
   );
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(baseString));
   const computed = "v0=" + Array.from(new Uint8Array(mac)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  console.log("slack sig expected:", computed);
+  console.log("slack sig received:", signature);
   return computed === signature;
 }
 
@@ -94,7 +96,7 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
 
   const { device, rawValue } = parseTokens(rest);
   ctx.waitUntil(dispatchCommand(command, device, rawValue, env, doStub));
-  return new Response("", { status: 200 });
+  return new Response(command, { status: 200 });
 }
 
 function verifyTelegramSecret(request: Request, env: Env): boolean {
