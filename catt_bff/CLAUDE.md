@@ -40,13 +40,13 @@ Google Home / Slack / Telegram / curl
 
 ### Key source files
 
-- **`src/index.ts`** — Fetch handler + `scheduled` handler (daily state reset at 03:03 UTC: clears queue/alarm, resets `app` and `device` to defaults — no catt_server call). Routes `/device/*` to the `DeviceQueue` Durable Object. Auth check skips `/fulfillment`, `/oauth/*`, `/echo`.
+- **`src/index.ts`** — Fetch handler + `scheduled` handler (daily state reset at 03:03 UTC: clears queue/alarm, resets `app` and `device` to defaults — no catt_server call). Routes `/device/*` to the `DeviceQueue` Durable Object. Auth check skips `/fulfillment`, `/oauth/*`, `/echo`, `/slack` (Slack uses its own signing secret verification instead).
 - **`src/DeviceQueue.ts`** — Durable Object with SQLite (`state.storage.sql`). Three tables: `queue` (play queue), `kv` (per-device state), `history` (last 10 played URLs, excluding TTS/cast_site). Handles enqueue/advance/shuffle/alarm-based polling. `fetch()` dispatches on `parts[2]` (the action segment of `/device/box/<action>`). Routes: `state`, `play`, `prev`, `next`, `stop`, `clear`, `cast`, `site`, `shuffle`, `set`, `catt`, `rewind`, `ffwd`, `sleep`, `history`, `mute`, `unmute`. `state` and `history` responses include `Cache-Control: no-store`.
 - **`src/devices.ts`** — Single device (`"box"`), input definitions (`k`=Mini Kitchen, `o`=Mini Office, `b`=Mini Bedroom, `zbk`=Mini ZBK, `tv`=Google TV, `otv`=Office TV), channel list, and defaults. `INPUT_TO_DEVICE` is derived from `availableInputs` — maps every key and `name_synonym` (lowercased) to the catt_server device name, so short aliases (`k`, `o`), full names (`kitchen`, `office`), and any synonym added to `availableInputs` all resolve automatically. `orderedInputs: true` — inputs are ordered `k→o→b→zbk→tv→otv` (wrapping). `getAppKey(deviceId, input, fallback)` resolves an app key or synonym to the canonical key. `getAdjacentInput(deviceId, currentKey, delta)` returns the input key ±delta positions away (wraps around).
 - **`src/catt.ts`** — HTTP client for `catt_server`. Attaches `X-Catt-Secret` header.
 - **`src/urlHelper.ts`** — Normalises YouTube URLs (short links, bare IDs, `/embed/`, `/v/`) and resolves bare strings to `https://r.manojbaba.com/r/<encoded-key>`. Bare strings (non-URL, non-http) are `encodeURIComponent`-encoded before appending to `BASE_REDIRECT` so multi-word search queries survive the redirect worker's `decodeURIComponent`.
 - **`src/googleHome.ts`** — Google Home C2C SYNC/QUERY/EXECUTE intent handlers. QUERY maps `session` kv (`"active"`/`"paused"`/`"idle"`) to `playbackState` (`"PLAYING"`/`"PAUSED"`/`"STOPPED"`), and falls back `currentApplication` to `DEFAULT_APP` when unset. `selectChannel` and `relativeChannel` call `/clear` before `/cast` to ensure immediate playback rather than queuing. `NextInput`/`PreviousInput` use `getAdjacentInput` to cycle through ordered inputs. `appSelect` resolves `newApplication` or `newApplicationName` via `getAppKey`. `appInstall` and `appSearch` search YouTube via the redirect worker (`/r/<encoded-query>`) and cast immediately. `mediaSeekRelative` maps positive `relativePositionMs` to `ffwd` and negative to `rewind` on `catt_server`. `mute` sends `volumemute` to `catt_server` (`volumeCanMuteAndUnmute` is `false` so Google Home does not advertise it).
-- **`src/integrations.ts`** — Slack slash command + Telegram webhook handlers. Supported commands: `cast`, `volume`, `mute`, `unmute`, `tts`, `play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep`. Token layout: `<command> [device] [value]`. The `device` token is optional — if the second token is not a known `INPUT_TO_DEVICE` entry (short alias, full name, or synonym), it is folded into the value and the default device is used (e.g. `cast oh maria` → device=default, value=`"oh maria"`; `cast kitchen oh maria` → device=Mini Kitchen, value=`"oh maria"`). `rewind`, `ffwd`, and `sleep` route through the DO with the value appended to the URL path; the value falls back to the `device` token if no explicit value is given (e.g. `rewind 60` puts `60` in the device slot, which is caught by the fallback).
+- **`src/integrations.ts`** — Slack slash command + Telegram webhook handlers. Slack requests are authenticated via HMAC-SHA256 signing secret (`SLACK_SIGNING_SECRET`) checked against `X-Slack-Signature` header — exempt from API key check. Telegram requests are validated via `X-Telegram-Bot-Api-Secret-Token`. Supported commands: `cast`, `volume`, `mute`, `unmute`, `tts`, `play`, `stop`, `prev`, `next`, `rewind`, `ffwd`, `sleep`. Token layout: `<command> [device] [value]`. The `device` token is optional — if the second token is not a known `INPUT_TO_DEVICE` entry (short alias, full name, or synonym), it is folded into the value and the default device is used (e.g. `cast oh maria` → device=default, value=`"oh maria"`; `cast kitchen oh maria` → device=Mini Kitchen, value=`"oh maria"`). `rewind`, `ffwd`, and `sleep` route through the DO with the value appended to the URL path; the value falls back to the `device` token if no explicit value is given (e.g. `rewind 60` puts `60` in the device slot, which is caught by the fallback).
 - **`src/cattHandler.ts`** — Handler for `POST /catt`: routes `DO_COMMANDS` (`play`, `stop`, `prev`, `next`) directly to the DO; routes `DO_VALUE_COMMANDS` (`rewind`, `ffwd`, `sleep`) to the DO with the `value` field appended to the URL path; routes everything else to the DO's `/catt` sub-route.
 - **`src/oauth.ts`** — Google account-linking stub (returns random 32-char `access_token` and `refresh_token`, 1-year expiry).
 
@@ -64,7 +64,8 @@ When switching to an audio-only input (Mini devices), `app` is always reset to `
 
 ### Auth
 
-- All routes except `/fulfillment`, `/oauth/*`, `/echo` require `X-API-Key` matching `CATT_API_KEY` secret.
+- All routes except `/fulfillment`, `/oauth/*`, `/echo`, `/slack` require `X-API-Key` matching `CATT_API_KEY` secret.
+- `/slack` is exempt from API key check — verified instead via HMAC-SHA256 Slack signing secret (`SLACK_SIGNING_SECRET`).
 - Outbound requests to `catt_server` include `X-Catt-Secret` from `CATT_SERVER_SECRET` secret.
 
 ## Secrets (set via `wrangler secret put`)
@@ -75,6 +76,7 @@ When switching to an audio-only input (Mini devices), `app` is always reset to `
 | `CATT_SERVER_SECRET` | Passed to catt_server as `X-Catt-Secret` |
 | `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
 | `TELEGRAM_SECRET_TOKEN` | Validates Telegram webhook requests |
+| `SLACK_SIGNING_SECRET` | Validates Slack slash command requests (HMAC-SHA256) |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 (playlist shuffle) |
 
 ## Testing conventions

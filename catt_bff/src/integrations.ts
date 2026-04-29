@@ -56,9 +56,31 @@ async function dispatchCommand(
   return "cast";
 }
 
+async function verifySlackSignature(request: Request, env: Env, body: string): Promise<boolean> {
+  const secret = env.SLACK_SIGNING_SECRET;
+  if (!secret) return true;
+  const timestamp = request.headers.get("X-Slack-Request-Timestamp") ?? "";
+  const signature = request.headers.get("X-Slack-Signature") ?? "";
+  const baseString = `v0:${timestamp}:${body}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(baseString));
+  const computed = "v0=" + Array.from(new Uint8Array(mac)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return computed === signature;
+}
+
 export async function handleSlack(request: Request, env: Env, doStub: DurableObjectStub): Promise<Response> {
-  const form   = await request.formData();
-  const text   = (form.get("text") as string ?? "").trim();
+  const body   = await request.text();
+  if (!await verifySlackSignature(request, env, body)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  const form   = new URLSearchParams(body);
+  const text   = (form.get("text") ?? "").trim();
   const tokens = text.split(/\s+/);
 
   const [command, ...rest] = tokens;

@@ -28,7 +28,7 @@ export default {
     const method = request.method.toUpperCase();
 
     // Auth check for all routes except Google Home and OAuth
-    const isPublicPath = path === "/fulfillment" || path.startsWith("/oauth/") || path === "/echo";
+    const isPublicPath = path === "/fulfillment" || path.startsWith("/oauth/") || path === "/echo" || path === "/slack";
     if (!isPublicPath) {
       const apiKey = env.CATT_API_KEY;
       if (apiKey && request.headers.get("X-API-Key") !== apiKey) {
