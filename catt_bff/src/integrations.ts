@@ -1,6 +1,5 @@
 import { castCommand } from "./catt";
-import { getParsedUrl } from "./urlHelper";
-import { resolveDevice, INPUT_TO_DEVICE } from "./devices";
+import { resolveDevice, INPUT_TO_DEVICE, DEFAULT_NEXT } from "./devices";
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute"]);
 
@@ -12,9 +11,6 @@ function parseTokens(tokens: string[]): { device: string; rawValue: string } {
   return { device: "", rawValue: [second, ...rest].join(" ").trim() };
 }
 
-function resolveValue(value: string): string {
-  return getParsedUrl(value);
-}
 
 async function dispatchCommand(
   command: string,
@@ -50,9 +46,11 @@ async function dispatchCommand(
     await doStub.fetch(new Request(`https://do/device/box/mute/${muted}`));
     return "mute";
   }
-  await castCommand(env.CATT_SERVER_URL, resolveDevice(device), "cast", resolveValue(rawValue), {
-    force_default: true,
-  }, env.CATT_SERVER_SECRET);
+  const castValue = rawValue.trim() || DEFAULT_NEXT;
+  await doStub.fetch(new Request("https://do/device/box/catt", {
+    method: "POST",
+    body: JSON.stringify({ command: "cast", device, value: castValue }),
+  }));
   return "cast";
 }
 
@@ -89,7 +87,7 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
   if (command === "state") {
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
     const json = await res.json();
-    return new Response(JSON.stringify(json, null, 2), { status: 200 });
+    return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
   const { device, rawValue } = parseTokens(rest);

@@ -123,9 +123,12 @@ describe("handleSlack — response", () => {
     const res = await handleSlack(request, env, ctx, stub);
     expect(res.status).toBe(200);
     expect(ctx.waitUntil).not.toHaveBeenCalled();
-    const body = await res.json() as Record<string, unknown>;
-    expect(body.session).toBe("idle");
-    expect(body.device).toBe("otv");
+    const text = await res.text();
+    expect(text).toContain("```");
+    expect(text).toContain('"session"');
+    expect(text).toContain('"idle"');
+    expect(text).toContain('"device"');
+    expect(text).toContain('"otv"');
   });
 
   it("returns usage message when no command given", async () => {
@@ -137,46 +140,44 @@ describe("handleSlack — response", () => {
   });
 });
 
-async function getCastBody(mockFetch: ReturnType<typeof vi.fn>): Promise<Record<string, unknown>> {
-  const call = mockFetch.mock.calls[0];
-  const body = await (call[1] as RequestInit).body;
-  return JSON.parse(body as string);
+async function getDoBody(stub: DurableObjectStub): Promise<Record<string, unknown>> {
+  const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+    (c: unknown[]) => (c[0] as Request).url.includes("/catt"),
+  );
+  return JSON.parse(await (call![0] as Request).text());
 }
 
 describe("handleSlack — device token parsing", () => {
   it("treats known alias as device", async () => {
     const env = makeEnv();
-    const mockFetch = vi.fn(async () => new Response("{}"));
-    vi.stubGlobal("fetch", mockFetch);
+    const stub = makeDoStub();
     const ctx = makeCtx();
     const request = await makeSlackRequest("cast k believer", env);
-    await handleSlack(request, env, ctx, makeDoStub());
+    await handleSlack(request, env, ctx, stub);
     await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    const body = await getCastBody(mockFetch);
-    expect(body.device).toBe("Mini Kitchen");
+    const body = await getDoBody(stub);
+    expect(body.device).toBe("k");
   });
 
   it("treats unknown second token as part of value", async () => {
     const env = makeEnv();
-    const mockFetch = vi.fn(async () => new Response("{}"));
-    vi.stubGlobal("fetch", mockFetch);
+    const stub = makeDoStub();
     const ctx = makeCtx();
     const request = await makeSlackRequest("cast oh maria", env);
-    await handleSlack(request, env, ctx, makeDoStub());
+    await handleSlack(request, env, ctx, stub);
     await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    const body = await getCastBody(mockFetch);
-    expect(body.value).toContain("oh%20maria");
+    const body = await getDoBody(stub);
+    expect(body.value).toBe("oh maria");
   });
 
   it("treats full name as device", async () => {
     const env = makeEnv();
-    const mockFetch = vi.fn(async () => new Response("{}"));
-    vi.stubGlobal("fetch", mockFetch);
+    const stub = makeDoStub();
     const ctx = makeCtx();
     const request = await makeSlackRequest("cast kitchen believer", env);
-    await handleSlack(request, env, ctx, makeDoStub());
+    await handleSlack(request, env, ctx, stub);
     await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    const body = await getCastBody(mockFetch);
-    expect(body.device).toBe("Mini Kitchen");
+    const body = await getDoBody(stub);
+    expect(body.device).toBe("kitchen");
   });
 });

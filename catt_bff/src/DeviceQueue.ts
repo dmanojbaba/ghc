@@ -348,13 +348,15 @@ export class DeviceQueue implements DurableObject {
       case "catt": {
         const body = await request.json() as { command: string; value?: string; device?: string };
         const cmd        = body.command;
-        const val        = body.value ?? "";
+        const val        = body.value?.trim() || DEFAULT_NEXT;
         const deviceArg  = body.device ?? "";
 
         if (deviceArg && deviceArg !== "queue") {
-          const key = getInputKey(DEVICE_ID, deviceArg, null) ?? deviceArg;
-          this.set("device", key);
-          if (isAudioOnlyInput(DEVICE_ID, key)) this.set("app", DEFAULT_APP);
+          const key = getInputKey(DEVICE_ID, deviceArg, null);
+          if (key) {
+            this.set("device", key);
+            if (isAudioOnlyInput(DEVICE_ID, key)) this.set("app", DEFAULT_APP);
+          }
         }
 
         const device = resolveDevice(this.get("device"));
