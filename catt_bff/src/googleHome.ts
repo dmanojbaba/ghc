@@ -51,7 +51,7 @@ export async function handleQuery(
         on:                  true,
         currentApplication:  doSt.app,
         currentInput:        inputKey,
-        currentModeSettings: { app_mode: doSt.app },
+        currentToggleSettings: { youtube_app: doSt.app === "youtube" },
         currentVolume:       DEFAULT_VOLUME,
         isMuted:             false,
         activityState:       "ACTIVE",
@@ -106,7 +106,7 @@ async function handleExecute(
                 playbackState: "STOPPED",
                 currentInput: DEFAULT_DEVICE,
                 currentApplication: "youtube",
-                currentModeSettings: { app_mode: "youtube" },
+                currentToggleSettings: { youtube_app: true },
               },
             };
           } else {
@@ -114,10 +114,11 @@ async function handleExecute(
             result = { status: "SUCCESS", states: { on: false, online: true, playbackState: "STOPPED" } };
           }
 
-        } else if (command === "action.devices.commands.SetModes") {
-          const appMode = (params.updateModeSettings as Record<string, string>)?.app_mode ?? DEFAULT_APP;
+        } else if (command === "action.devices.commands.SetToggles") {
+          const on = Boolean((params.updateToggleSettings as Record<string, boolean>)?.youtube_app);
+          const appMode = on ? "youtube" : DEFAULT_APP;
           await doGet(stub, "/set/app/" + appMode);
-          result = { status: "SUCCESS", states: { online: true, currentModeSettings: { app_mode: appMode } } };
+          result = { status: "SUCCESS", states: { online: true, currentToggleSettings: { youtube_app: on } } };
 
         } else if (command === "action.devices.commands.SetInput") {
           const newInput = String(params.newInput);
@@ -130,7 +131,7 @@ async function handleExecute(
               online: true,
               currentInput: key,
               currentApplication: newApp,
-              currentModeSettings: { app_mode: newApp },
+              currentToggleSettings: { youtube_app: newApp === "youtube" },
             },
           };
 

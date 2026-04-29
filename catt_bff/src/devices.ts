@@ -21,7 +21,7 @@ export const DEVICES: DeviceDefinition[] = [
       "action.devices.traits.Channel",
       "action.devices.traits.InputSelector",
       "action.devices.traits.MediaState",
-      "action.devices.traits.Modes",
+      "action.devices.traits.Toggles",
       "action.devices.traits.OnOff",
       "action.devices.traits.TransportControl",
       "action.devices.traits.Volume",
@@ -67,18 +67,13 @@ export const DEVICES: DeviceDefinition[] = [
         { key: "chennai", names: ["Radio Chennai"], number: "7" },
       ],
       commandOnlyChannels: true,
-      availableModes: [
+      availableToggles: [
         {
-          name: "app_mode",
-          name_values: [{ name_synonym: ["App Mode"], lang: "en" }],
-          settings: [
-            { setting_name: "default", setting_values: [{ setting_synonym: ["default"], lang: "en" }] },
-            { setting_name: "youtube", setting_values: [{ setting_synonym: ["youtube"], lang: "en" }] },
-          ],
+          name: "youtube_app",
+          name_values: [{ name_synonym: ["YouTube", "YouTube app", "YouTube mode"], lang: "en" }],
         },
       ],
-      commandOnlyModes: false,
-      queryOnlyModes: false,
+      commandOnlyToggles: false,
     },
   },
 ];

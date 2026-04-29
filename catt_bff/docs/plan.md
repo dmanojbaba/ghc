@@ -280,7 +280,7 @@ Single endpoint `POST /fulfillment`.
 Returns `DEVICES` from `devices.ts`.
 
 ### QUERY
-Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
+Calls DO `getState()`, maps to Google state shape. Returns `currentToggleSettings: { youtube_app: bool }` derived from `app` kv key (`youtube` → `true`, `default` → `false`).
 
 ### EXECUTE — Command Mapping
 
@@ -288,7 +288,7 @@ Calls DO `getState()` + `getStatus` on catt_server, maps to Google state shape.
 |---|---|
 | `OnOff` (on) | Call `/box/clear` (clears queue + alarm, no catt_server call), then set `app=youtube`, `device=otv` |
 | `OnOff` (off) | Call `/box/stop` (stops catt_server + clears queue + alarm); `app` and `device` left unchanged |
-| `SetModes` | Update `app` state in DO |
+| `SetToggles` | `youtube_app` toggle: `true` → `app=youtube`, `false` → `app=default` in DO |
 | `SetInput` | Update `device` state in DO |
 | `selectChannel` | Call `/clear` (reset queue/alarm, no catt_server call), store channel key via `/set/channel/:key`, then cast immediately via `/cast/:url` — URL resolved via `getParsedUrl` |
 | `relativeChannel` | Read `channel` from DO state, compute adjacent channel via `getAdjacentChannel` (wraps around), call `/clear`, store via `/set/channel/:key`, then cast immediately via `/cast/:url` |
