@@ -71,8 +71,6 @@ async function verifySlackSignature(request: Request, env: Env, body: string): P
   );
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(baseString));
   const computed = "v0=" + Array.from(new Uint8Array(mac)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  console.log("slack sig expected:", computed);
-  console.log("slack sig received:", signature);
   return computed === signature;
 }
 
