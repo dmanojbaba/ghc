@@ -96,7 +96,7 @@ async function handleExecute(
         if (command === "action.devices.commands.OnOff") {
           if (params.on) {
             await doGet(stub, "/clear");
-            await doGet(stub, "/set/app/youtube");
+            await doGet(stub, "/set/app/" + DEFAULT_APP);
             await doGet(stub, "/set/device/" + DEFAULT_DEVICE);
             result = {
               status: "SUCCESS",
@@ -105,8 +105,8 @@ async function handleExecute(
                 online: true,
                 playbackState: "STOPPED",
                 currentInput: DEFAULT_DEVICE,
-                currentApplication: "youtube",
-                currentToggleSettings: { youtube_app: true },
+                currentApplication: DEFAULT_APP,
+                currentToggleSettings: { youtube_app: false },
               },
             };
           } else {

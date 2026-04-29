@@ -135,7 +135,7 @@ export class DeviceQueue implements DurableObject {
     this.set("tts",     DEFAULT_TTS);
   }
 
-  async clear(): Promise<void> {
+  async stopAndClearState(): Promise<void> {
     const device = resolveDevice(this.get("device"));
     await castCommand(this.serverUrl, device, "stop", undefined, undefined, this.secret);
     await this.clearState();
@@ -209,7 +209,7 @@ export class DeviceQueue implements DurableObject {
   async alarm(): Promise<void> {
     const sleepAt = this.get("sleep_at");
     if (sleepAt && Date.now() >= Number(sleepAt)) {
-      await this.clear();
+      await this.stopAndClearState();
       return;
     }
 
@@ -320,7 +320,7 @@ export class DeviceQueue implements DurableObject {
       }
 
       case "stop":
-        await this.clear();
+        await this.stopAndClearState();
         return new Response("ok");
 
       case "clear":

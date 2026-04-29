@@ -7,11 +7,11 @@ Cloudflare Worker BFF for controlling Chromecast devices. Deployed at `ghc.manoj
 | Input key | Device |
 |---|---|
 | `k` | Mini Kitchen |
-| `o` | Mini Office |
+| `o` | Mini Office (default) |
 | `b` | Mini Bedroom |
 | `zbk` | Mini ZBK |
 | `tv` | Google TV |
-| `otv` | Office TV (default) |
+| `otv` | Office TV |
 
 ## Slack / Telegram
 

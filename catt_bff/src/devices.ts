@@ -148,7 +148,7 @@ export const INPUT_TO_DEVICE: Record<string, string> = Object.fromEntries(
 );
 
 export const DEFAULT_CHANNEL = "ping";
-export const DEFAULT_DEVICE = "otv";
+export const DEFAULT_DEVICE = "o";
 export const DEFAULT_APP = "default";
 export const DEFAULT_PREV = "pingr2";
 export const DEFAULT_NEXT = "ping";
