@@ -17,6 +17,8 @@ Cloudflare Worker BFF for controlling Chromecast devices. Deployed at `ghc.manoj
 
 Command syntax: `<command> [device] [value]`
 
+Commands and device names are case-insensitive. Telegram commands may be prefixed with `/` (e.g. `/help`, `/state`).
+
 | Command | Example | Device | Notes |
 |---|---|---|---|
 | `cast` | `cast otv https://youtu.be/abc123` | input | Cast a URL immediately. Accepts YouTube URLs, shortcodes, or full URLs. |

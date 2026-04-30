@@ -22,8 +22,9 @@ help                 – show this message`;
 
 function parseTokens(tokens: string[]): { device: string; rawValue: string } {
   const [second = "", ...rest] = tokens;
-  if (second in INPUT_TO_DEVICE) {
-    return { device: second, rawValue: rest.join(" ") };
+  const secondLower = second.toLowerCase();
+  if (secondLower in INPUT_TO_DEVICE) {
+    return { device: secondLower, rawValue: rest.join(" ") };
   }
   return { device: "", rawValue: [second, ...rest].join(" ").trim() };
 }
@@ -103,7 +104,8 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
   const text   = (form.get("text") ?? "").trim();
   const tokens = text.split(/\s+/);
 
-  const [command, ...rest] = tokens;
+  const [rawCommand, ...rest] = tokens;
+  const command = rawCommand.toLowerCase();
   if (!command) return new Response("Usage: <command> [device] [value]", { status: 200 });
 
   if (command === "help") {
@@ -151,7 +153,8 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
 
   const tokens  = text.split(/\s+/);
 
-  const [command, ...rest] = tokens;
+  const [rawCommand, ...rest] = tokens;
+  const command = (rawCommand.startsWith("/") ? rawCommand.slice(1) : rawCommand).toLowerCase();
   if (!command) return Response.json({});
 
   if (chatId && env.TELEGRAM_BOT_TOKEN) {

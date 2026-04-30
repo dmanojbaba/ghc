@@ -216,3 +216,50 @@ describe("handleTelegram — chat ID allowlist", () => {
     expect(stub.fetch).not.toHaveBeenCalled();
   });
 });
+
+describe("handleTelegram — command parsing", () => {
+  it("handles slash-prefixed command", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("/play", 111), env, stub);
+    expect(stub.fetch).toHaveBeenCalled();
+  });
+
+  it("handles uppercase command", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("PLAY", 111), env, stub);
+    expect(stub.fetch).toHaveBeenCalled();
+  });
+
+  it("handles uppercase device token", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("cast OTV believer", 111), env, stub);
+    const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c: unknown[]) => (c[0] as Request).url.includes("/catt"),
+    );
+    const body = JSON.parse(await (call![0] as Request).text());
+    expect(body.device).toBe("otv");
+  });
+});
+
+describe("handleSlack — command parsing", () => {
+  it("handles uppercase command", async () => {
+    const env = makeEnv();
+    const request = await makeSlackRequest("PLAY", env);
+    const res = await handleSlack(request, env, makeCtx(), makeDoStub());
+    expect(res.status).toBe(200);
+  });
+
+  it("handles uppercase device token", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("cast OTV believer", env);
+    await handleSlack(request, env, ctx, stub);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const body = await getDoBody(stub);
+    expect(body.device).toBe("otv");
+  });
+});
