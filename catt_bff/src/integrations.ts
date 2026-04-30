@@ -127,11 +127,13 @@ function verifyTelegramSecret(request: Request, env: Env): boolean {
   return request.headers.get("X-Telegram-Bot-Api-Secret-Token") === secret;
 }
 
-async function sendTelegramMessage(token: string, chatId: number, text: string): Promise<void> {
+async function sendTelegramMessage(token: string, chatId: number, text: string, pre = false): Promise<void> {
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify(pre
+      ? { chat_id: chatId, text: `<pre>${text}</pre>`, parse_mode: "HTML" }
+      : { chat_id: chatId, text }),
   });
 }
 
@@ -154,13 +156,13 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
 
   if (chatId && env.TELEGRAM_BOT_TOKEN) {
     if (command === "help") {
-      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, HELP_TEXT);
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, HELP_TEXT, true);
       return Response.json({});
     }
     if (command === "state") {
       const res   = await doStub.fetch(new Request("https://do/device/box/state"));
       const json  = await res.json();
-      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2));
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
       return Response.json({});
     }
   }
