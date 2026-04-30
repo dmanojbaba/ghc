@@ -131,6 +131,7 @@ export class DeviceQueue implements DurableObject {
     this.set("next",    DEFAULT_NEXT);
     this.set("prev",    DEFAULT_PREV);
     this.set("session", DEFAULT_SESSION);
+    this.set("playlist", DEFAULT_PLAYLIST);
     this.set("sleep_at", DEFAULT_SLEEP_AT);
     this.set("tts",     DEFAULT_TTS);
   }
@@ -325,6 +326,12 @@ export class DeviceQueue implements DurableObject {
 
       case "clear":
         await this.clearState();
+        return new Response("ok");
+
+      case "reset":
+        await this.clearState();
+        this.set("device", DEFAULT_DEVICE);
+        this.set("app",    DEFAULT_APP);
         return new Response("ok");
 
       case "cast": {

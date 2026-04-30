@@ -1,4 +1,4 @@
-const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute"]);
+const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 const DO_VALUE_COMMANDS = new Set(["rewind", "ffwd", "sleep", "mute"]);
 
 export async function handleCatt(request: Request, _env: Env, doStub: DurableObjectStub): Promise<Response> {

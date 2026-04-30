@@ -32,6 +32,8 @@ Commands and device names are case-insensitive. Telegram commands may be prefixe
 | `unmute` | `unmute` | active | Unmute. Alias for `mute false`. |
 | `play` | `play` | active | Toggle play/pause. |
 | `stop` | `stop` | active | Stop playback and clear queue. |
+| `clear` | `clear` | active | Reset state to defaults — preserves `device` and `app`. |
+| `reset` | `reset` | active | Full reset including `device` and `app` to defaults. |
 | `prev` | `prev` | active | Replay previous item. |
 | `next` | `next` | active | Skip to next item in queue. |
 | `rewind` | `rewind 60` | active | Rewind N seconds (default 30). |
@@ -74,6 +76,12 @@ curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
 curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "next"}'
 
+# State reset
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "clear"}'
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "reset"}'
+
 # Seek
 curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "rewind", "value": "60"}'
@@ -105,6 +113,8 @@ All require `X-API-Key` header.
 | `GET /device/box/history` | Last 10 played items (newest first). Excludes TTS. |
 | `GET /device/box/play` | Toggle play/pause. |
 | `GET /device/box/stop` | Stop playback and clear queue. |
+| `GET /device/box/clear` | Reset state to defaults — preserves `device` and `app`. |
+| `GET /device/box/reset` | Full reset including `device` and `app` to defaults. |
 | `GET /device/box/prev` | Replay previous item. |
 | `GET /device/box/next` | Skip to next item in queue. |
 | `GET /device/box/cast/:url` | Enqueue a URL. |

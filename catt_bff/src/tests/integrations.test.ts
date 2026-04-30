@@ -263,3 +263,61 @@ describe("handleSlack — command parsing", () => {
     expect(body.device).toBe("otv");
   });
 });
+
+describe("handleSlack — clear and reset commands", () => {
+  it("routes clear to DO", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("clear", env);
+    await handleSlack(request, env, ctx, stub);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect((call[0] as Request).url).toContain("/clear");
+  });
+
+  it("routes reset to DO", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("reset", env);
+    await handleSlack(request, env, ctx, stub);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect((call[0] as Request).url).toContain("/reset");
+  });
+});
+
+describe("handleTelegram — clear and reset send state reply", () => {
+  it("sends state after clear", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const state = { session: "idle", device: "o" };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const env = makeEnv();
+    await handleTelegram(makeTelegramRequest("clear", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toContain('"session"');
+  });
+
+  it("sends state after reset", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const state = { session: "idle", device: "o" };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const env = makeEnv();
+    await handleTelegram(makeTelegramRequest("reset", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toContain('"session"');
+  });
+});

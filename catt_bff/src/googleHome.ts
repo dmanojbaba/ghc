@@ -95,9 +95,7 @@ async function handleExecute(
 
         if (command === "action.devices.commands.OnOff") {
           if (params.on) {
-            await doGet(stub, "/clear");
-            await doGet(stub, "/set/app/" + DEFAULT_APP);
-            await doGet(stub, "/set/device/" + DEFAULT_DEVICE);
+            await doGet(stub, "/reset");
             result = {
               status: "SUCCESS",
               states: {

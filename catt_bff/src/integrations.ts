@@ -1,7 +1,7 @@
 import { castCommand } from "./catt";
 import { resolveDevice, INPUT_TO_DEVICE } from "./devices";
 
-const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute"]);
+const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 
 const HELP_TEXT = `Commands: <command> [device] [value]
 cast [device] [url]  – cast URL (omit for next)
@@ -11,6 +11,8 @@ volume up/down       – step volume
 mute / unmute        – mute toggle
 play                 – toggle play/pause
 stop                 – stop and clear queue
+clear                – reset state to defaults (keeps device and app)
+reset                – full reset including device and app
 prev                 – replay previous
 next                 – skip to next
 rewind [seconds]     – rewind (default 30s)
@@ -176,5 +178,12 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
 
   const { device, rawValue } = parseTokens(rest);
   await dispatchCommand(command, device, rawValue, env, doStub);
+
+  if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset")) {
+    const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+    const json = await res.json();
+    await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
+  }
+
   return Response.json({});
 }
