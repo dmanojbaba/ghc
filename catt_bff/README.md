@@ -37,6 +37,7 @@ Command syntax: `<command> [device] [value]`
 | `sleep` | `sleep 30` | active | Stop playback after N minutes. |
 | `sleep` | `sleep cancel` | active | Cancel a pending sleep timer. |
 | `state` | `state` | active | Return current device state. |
+| `help` | `help` | active | List all supported commands. |
 
 ## POST /catt
 

@@ -70,6 +70,9 @@ Cloudflare Worker. Requires three secrets set via `wrangler secret put`:
 | `CATT_API_KEY` | Shared secret required on all non-Google routes via `X-API-Key` header; if unset, auth is skipped |
 | `CATT_SERVER_SECRET` | Shared secret sent to catt_server via `X-Catt-Secret` header; catt_server reads from `CATT_SERVER_SECRET` env var |
 | `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
+| `SLACK_SIGNING_SECRET` | Validates Slack slash command requests (HMAC-SHA256) |
+| `TELEGRAM_ALLOWED_CHAT_IDS` | Comma-separated list of allowed Telegram chat IDs; if unset all chats are accepted |
+| `TELEGRAM_BOT_TOKEN` | Bot token for sending replies via Telegram `sendMessage` API |
 | `TELEGRAM_SECRET_TOKEN` | Validates incoming Telegram webhook requests |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key (for playlist shuffle) |
 
@@ -79,6 +82,9 @@ npm install
 wrangler secret put CATT_API_KEY
 wrangler secret put CATT_SERVER_SECRET
 wrangler secret put CATT_SERVER_URL
+wrangler secret put SLACK_SIGNING_SECRET
+wrangler secret put TELEGRAM_ALLOWED_CHAT_IDS
+wrangler secret put TELEGRAM_BOT_TOKEN
 wrangler secret put TELEGRAM_SECRET_TOKEN
 wrangler secret put YOUTUBE_API_KEY
 wrangler deploy

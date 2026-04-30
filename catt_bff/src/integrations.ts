@@ -3,6 +3,23 @@ import { resolveDevice, INPUT_TO_DEVICE } from "./devices";
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute"]);
 
+const HELP_TEXT = `Commands: <command> [device] [value]
+cast [device] [url]  – cast URL (omit for next)
+tts [text]           – speak text
+volume [device] <n>  – set volume 0–100
+volume up/down       – step volume
+mute / unmute        – mute toggle
+play                 – toggle play/pause
+stop                 – stop and clear queue
+prev                 – replay previous
+next                 – skip to next
+rewind [seconds]     – rewind (default 30s)
+ffwd [seconds]       – fast-forward (default 30s)
+sleep <minutes>      – sleep timer
+sleep cancel         – cancel sleep timer
+state                – show device state
+help                 – show this message`;
+
 function parseTokens(tokens: string[]): { device: string; rawValue: string } {
   const [second = "", ...rest] = tokens;
   if (second in INPUT_TO_DEVICE) {
@@ -89,6 +106,10 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
   const [command, ...rest] = tokens;
   if (!command) return new Response("Usage: <command> [device] [value]", { status: 200 });
 
+  if (command === "help") {
+    return new Response("```\n" + HELP_TEXT + "\n```", { status: 200 });
+  }
+
   if (command === "state") {
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
     const json = await res.json();
@@ -120,16 +141,28 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
   const body    = await request.json() as { message?: { text?: string; chat?: { id: number } } };
   const text    = (body.message?.text ?? "").trim();
   const chatId  = body.message?.chat?.id;
+
+  if (env.TELEGRAM_ALLOWED_CHAT_IDS) {
+    const allowed = env.TELEGRAM_ALLOWED_CHAT_IDS.split(",").map((s) => s.trim());
+    if (!chatId || !allowed.includes(String(chatId))) return Response.json({});
+  }
+
   const tokens  = text.split(/\s+/);
 
   const [command, ...rest] = tokens;
   if (!command) return Response.json({});
 
-  if (command === "state" && chatId && env.TELEGRAM_BOT_TOKEN) {
-    const res   = await doStub.fetch(new Request("https://do/device/box/state"));
-    const json  = await res.json();
-    await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2));
-    return Response.json({});
+  if (chatId && env.TELEGRAM_BOT_TOKEN) {
+    if (command === "help") {
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, HELP_TEXT);
+      return Response.json({});
+    }
+    if (command === "state") {
+      const res   = await doStub.fetch(new Request("https://do/device/box/state"));
+      const json  = await res.json();
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2));
+      return Response.json({});
+    }
   }
 
   const { device, rawValue } = parseTokens(rest);

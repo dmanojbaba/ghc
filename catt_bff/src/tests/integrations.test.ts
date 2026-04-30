@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { handleSlack } from "../integrations";
+import { handleSlack, handleTelegram } from "../integrations";
 
 const SIGNING_SECRET = "test-signing-secret";
 const TIMESTAMP = "1234567890";
@@ -23,6 +23,7 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
     CATT_SERVER_SECRET: "server-secret",
     CATT_SERVER_URL: "https://catt.example.com",
     SLACK_SIGNING_SECRET: SIGNING_SECRET,
+    TELEGRAM_ALLOWED_CHAT_IDS: "",
     TELEGRAM_BOT_TOKEN: "test-bot-token",
     TELEGRAM_SECRET_TOKEN: "",
     YOUTUBE_API_KEY: "",
@@ -179,5 +180,39 @@ describe("handleSlack — device token parsing", () => {
     await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
     const body = await getDoBody(stub);
     expect(body.device).toBe("kitchen");
+  });
+});
+
+function makeTelegramRequest(text: string, chatId: number): Request {
+  return new Request("https://ghc.manojbaba.com/telegram", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ message: { text, chat: { id: chatId } } }),
+  });
+}
+
+describe("handleTelegram — chat ID allowlist", () => {
+  it("allows any chat when TELEGRAM_ALLOWED_CHAT_IDS is not set", async () => {
+    const env = makeEnv({ TELEGRAM_ALLOWED_CHAT_IDS: "" });
+    const stub = makeDoStub();
+    const res = await handleTelegram(makeTelegramRequest("play", 111), env, stub);
+    expect(res.status).toBe(200);
+    expect(stub.fetch).toHaveBeenCalled();
+  });
+
+  it("allows a chat ID in the allowlist", async () => {
+    const env = makeEnv({ TELEGRAM_ALLOWED_CHAT_IDS: "111,222" });
+    const stub = makeDoStub();
+    const res = await handleTelegram(makeTelegramRequest("play", 111), env, stub);
+    expect(res.status).toBe(200);
+    expect(stub.fetch).toHaveBeenCalled();
+  });
+
+  it("silently ignores a chat ID not in the allowlist", async () => {
+    const env = makeEnv({ TELEGRAM_ALLOWED_CHAT_IDS: "111,222" });
+    const stub = makeDoStub();
+    const res = await handleTelegram(makeTelegramRequest("play", 999), env, stub);
+    expect(res.status).toBe(200);
+    expect(stub.fetch).not.toHaveBeenCalled();
   });
 });
