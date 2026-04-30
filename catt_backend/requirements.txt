@@ -2,5 +2,5 @@ catt
 flask>=3.0
 gtts
 gunicorn>=25.3.0
-pychromecast>=14.0
+pychromecast>=14.0.10
 zeroconf>=0.132
