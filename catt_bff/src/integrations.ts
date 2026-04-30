@@ -129,12 +129,16 @@ function verifyTelegramSecret(request: Request, env: Env): boolean {
   return request.headers.get("X-Telegram-Bot-Api-Secret-Token") === secret;
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 async function sendTelegramMessage(token: string, chatId: number, text: string, pre = false): Promise<void> {
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(pre
-      ? { chat_id: chatId, text: `<pre>${text}</pre>`, parse_mode: "HTML" }
+      ? { chat_id: chatId, text: `<pre>${escapeHtml(text)}</pre>`, parse_mode: "HTML" }
       : { chat_id: chatId, text }),
   });
 }
