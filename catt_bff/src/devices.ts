@@ -127,7 +127,7 @@ export const DEVICES: DeviceDefinition[] = [
   },
 ];
 
-// Derived from availableInputs: maps every key and name_synonym → catt_server device name
+// Derived from availableInputs: maps every key and name_synonym → catt_backend device name
 export const INPUT_TO_DEVICE: Record<string, string> = Object.fromEntries(
   DEVICES.flatMap((d) =>
     (

@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: pip
-    directory: /catt_server
+    directory: /catt_backend
     schedule:
       interval: weekly
       day: tuesday

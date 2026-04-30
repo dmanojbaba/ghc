@@ -2,8 +2,8 @@
 
 Control Chromecast devices over HTTP. Three components:
 
-- **`catt_server`** — Flask REST API that wraps the [`catt`](https://github.com/skorokithakis/catt) CLI. Runs on the LAN inside Docker, exposed externally via Cloudflare Tunnel.
-- **`catt_bff`** — Cloudflare Worker that sits in front of `catt_server`, adding per-device play queues, Google Home integration, Slack/Telegram webhooks, and an ad-hoc `POST /catt` endpoint for curl usage.
+- **`catt_backend`** — Flask REST API that wraps the [`catt`](https://github.com/skorokithakis/catt) CLI. Runs on the LAN inside Docker, exposed externally via Cloudflare Tunnel.
+- **`catt_bff`** — Cloudflare Worker that sits in front of `catt_backend`, adding per-device play queues, Google Home integration, Slack/Telegram webhooks, and an ad-hoc `POST /catt` endpoint for curl usage.
 - **`redirect`** — Cloudflare Worker for URL shortening and YouTube search. Deployed at `r.manojbaba.com`.
 
 ## Architecture
@@ -15,27 +15,27 @@ Google Assistant / Slack / Telegram
   Cloudflare Worker (catt_bff)
          │  Cloudflare Tunnel
          ▼
-  catt_server (LAN, Docker)
+  catt_backend (LAN, Docker)
          │
          ▼
   Chromecast devices
 ```
 
-## catt_server
+## catt_backend
 
 Flask app running on port 5000. All commands go to `POST /catt` with a JSON body.
 
 ```bash
-docker build -t catt-server ./catt_server
-docker run --network host -e CATT_SERVER_SECRET=your-secret catt-server
+docker build -t catt-backend ./catt_backend
+docker run --network host -e CATT_BACKEND_SECRET=your-secret catt-backend
 ```
 
-> `--network host` is required for mDNS Chromecast discovery. `CATT_SERVER_SECRET` is optional — if unset, auth is skipped.
+> `--network host` is required for mDNS Chromecast discovery. `CATT_BACKEND_SECRET` is optional — if unset, auth is skipped.
 
 On the Pi, the service is managed by systemd (`catt/catt.service`). The secret is loaded from `/home/pi/dotfiles/catt/.env`:
 
 ```bash
-echo "CATT_SERVER_SECRET=your-secret" > /home/pi/dotfiles/catt/.env
+echo "CATT_BACKEND_SECRET=your-secret" > /home/pi/dotfiles/catt/.env
 chmod 600 /home/pi/dotfiles/catt/.env
 sudo systemctl daemon-reload
 sudo systemctl restart catt
@@ -68,8 +68,8 @@ Cloudflare Worker. Requires three secrets set via `wrangler secret put`:
 | Secret | Description |
 |---|---|
 | `CATT_API_KEY` | Shared secret required on all non-Google routes via `X-API-Key` header; if unset, auth is skipped |
-| `CATT_SERVER_SECRET` | Shared secret sent to catt_server via `X-Catt-Secret` header; catt_server reads from `CATT_SERVER_SECRET` env var |
-| `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
+| `CATT_BACKEND_SECRET` | Shared secret sent to catt_backend via `X-Catt-Secret` header; catt_backend reads from `CATT_BACKEND_SECRET` env var |
+| `CATT_BACKEND_URL` | Cloudflare Tunnel URL for catt_backend |
 | `SLACK_SIGNING_SECRET` | Validates Slack slash command requests (HMAC-SHA256) |
 | `TELEGRAM_ALLOWED_CHAT_IDS` | Comma-separated list of allowed Telegram chat IDs; if unset all chats are accepted |
 | `TELEGRAM_BOT_TOKEN` | Bot token for sending replies via Telegram `sendMessage` API |
@@ -80,8 +80,8 @@ Cloudflare Worker. Requires three secrets set via `wrangler secret put`:
 cd catt_bff
 npm install
 wrangler secret put CATT_API_KEY
-wrangler secret put CATT_SERVER_SECRET
-wrangler secret put CATT_SERVER_URL
+wrangler secret put CATT_BACKEND_SECRET
+wrangler secret put CATT_BACKEND_URL
 wrangler secret put SLACK_SIGNING_SECRET
 wrangler secret put TELEGRAM_ALLOWED_CHAT_IDS
 wrangler secret put TELEGRAM_BOT_TOKEN
@@ -106,7 +106,7 @@ wrangler deploy
 
 ### Scheduled jobs (cron)
 
-- **`3 3 * * *`** (3:03am UTC daily): Clears DO state (queue, alarm, `session`/`prev`/`next`/`tts`/`channel`) and resets `app` and `device` to defaults. No catt_server call.
+- **`3 3 * * *`** (3:03am UTC daily): Clears DO state (queue, alarm, `session`/`prev`/`next`/`tts`/`channel`) and resets `app` and `device` to defaults. No catt_backend call.
 
 ### API Reference
 
@@ -167,8 +167,8 @@ curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API
 | `/device/box/play` | Toggle play/pause |
 | `/device/box/prev` | Play previous (replays last TTS if `prev=tts`, plays pingr2 if no history) |
 | `/device/box/next` | Advance queue; casts ping if queue empty |
-| `/device/box/stop` | Stop playback on catt_server, clear queue, cancel alarm |
-| `/device/box/clear` | Clear queue + cancel alarm only, no catt_server call; used before channel changes to ensure immediate playback |
+| `/device/box/stop` | Stop playback on catt_backend, clear queue, cancel alarm |
+| `/device/box/clear` | Clear queue + cancel alarm only, no catt_backend call; used before channel changes to ensure immediate playback |
 | `/device/box/cast/:url` | Enqueue URL; plays immediately if idle |
 | `/device/box/site/:arg` | Stop + clear queue + cast_site URL, or TTS text |
 | `/device/box/shuffle` | Shuffle saved playlist |
@@ -213,7 +213,7 @@ npm run deploy  # wrangler deploy
 
 | Workflow | Trigger | Actions |
 |---|---|---|
-| `catt-server` | PR / push to main / manual | PR: run tests + build image. Merge: run tests + build + push to Docker Hub. |
+| `catt-backend` | PR / push to main / manual | PR: run tests + build image. Merge: run tests + build + push to Docker Hub. |
 | `catt-bff` | PR / push to main / manual | PR: run tests + wrangler dry-run. Merge/manual: run tests + deploy. |
 | `redirect` | PR / push to main / manual | PR: wrangler dry-run. Merge/manual: deploy. |
 
@@ -221,6 +221,6 @@ npm run deploy  # wrangler deploy
 
 | Secret | Used by |
 |---|---|
-| `DOCKERHUB_USERNAME` | catt-server workflow |
-| `DOCKERHUB_TOKEN` | catt-server workflow |
+| `DOCKERHUB_USERNAME` | catt-backend workflow |
+| `DOCKERHUB_TOKEN` | catt-backend workflow |
 | `CLOUDFLARE_API_TOKEN` | catt-bff, redirect workflows |

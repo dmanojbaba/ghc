@@ -8,12 +8,12 @@ The app is **standalone** — a separate application that installs `catt` and `f
 
 The existing `CattDevice` class in `catt/api.py` is too limited. We'll import and call `setup_cast()` from `catt.controllers` directly — the same path the CLI uses — for full feature parity.
 
-`catt_server` is **LAN-only**. It is exposed to the internet exclusively via Cloudflare Tunnel. Slack and Telegram integrations live in `catt_bff` (Cloudflare Workers), which calls `catt_server` via the tunnel.
+`catt_backend` is **LAN-only**. It is exposed to the internet exclusively via Cloudflare Tunnel. Slack and Telegram integrations live in `catt_bff` (Cloudflare Workers), which calls `catt_backend` via the tunnel.
 
 ## Project Structure
 
 ```
-catt_server/
+catt_backend/
 ├── app.py                   # Flask application (standalone, imports from catt)
 ├── requirements.txt         # flask + catt + gtts
 ├── Dockerfile               # slim Python image
@@ -98,7 +98,7 @@ Every response — success or error — must be valid JSON with `Content-Type: a
 - The `info` command returns raw pychromecast status fields which may include non-serialisable types (e.g. `UUID`, `datetime`); these are explicitly converted to strings by `_serialisable(obj)`
 - Errors are never returned as plain text or HTML — the Flask error handlers for 400/500 also return JSON
 
-## `catt_server/requirements.txt`
+## `catt_backend/requirements.txt`
 
 ```
 catt
@@ -109,7 +109,7 @@ pychromecast>=14.0
 zeroconf>=0.132
 ```
 
-## `catt_server/Dockerfile`
+## `catt_backend/Dockerfile`
 
 ```dockerfile
 FROM python:3.12-slim
@@ -140,7 +140,7 @@ Key choices:
 - `gunicorn` with 1 worker + 4 threads — pychromecast is not multiprocess-safe; threads are fine
 - `--network host` required at runtime for mDNS Chromecast discovery
 
-## `catt_server/app.py`
+## `catt_backend/app.py`
 
 Standalone Flask app. Imports directly from the installed `catt` package:
 
@@ -157,13 +157,13 @@ Structure:
 - `_serialisable(obj)` — recursively converts UUID/datetime/date to strings
 - One handler function per command (15 total, registered in `ACTION_HANDLERS`)
 - `ThreadPoolExecutor` with 4 workers — handlers run off the request thread for timeout support
-- `POST /catt` — checks `X-Catt-Secret` header against `CATT_SERVER_SECRET` env var (skipped if unset); dispatches to handler via executor, wraps errors into structured JSON
+- `POST /catt` — checks `X-Catt-Secret` header against `CATT_BACKEND_SECRET` env var (skipped if unset); dispatches to handler via executor, wraps errors into structured JSON
 - `main()` with argparse for `--host`, `--port`, `--timeout` (default 45s), `--debug`
 - Structured logging via `logging.basicConfig` — INFO on request received (logs full JSON body including `command`, `device`, `value`), INFO on success, WARNING on client errors, ERROR/EXCEPTION on server errors
 
 ### Authentication
 
-`CATT_SERVER_SECRET` env var — if set, every request to `POST /catt` must include an `X-Catt-Secret` header with a matching value. Requests with a missing or incorrect header are rejected with 401. If the env var is unset, auth is skipped (dev mode).
+`CATT_BACKEND_SECRET` env var — if set, every request to `POST /catt` must include an `X-Catt-Secret` header with a matching value. Requests with a missing or incorrect header are rejected with 401. If the env var is unset, auth is skipped (dev mode).
 
 ### Constants
 
@@ -175,13 +175,13 @@ Structure:
 
 ```bash
 # Build
-docker build -t catt-api ./catt_server
+docker build -t catt-api ./catt_backend
 
 # Run (host networking required for mDNS Chromecast discovery)
-docker run --network host -e CATT_SERVER_SECRET=your-secret catt-api
+docker run --network host -e CATT_BACKEND_SECRET=your-secret catt-api
 ```
 
-`CATT_SERVER_SECRET` is optional — if omitted, auth is skipped.
+`CATT_BACKEND_SECRET` is optional — if omitted, auth is skipped.
 
 > **Important**: Chromecast discovery uses mDNS (multicast DNS), which does not work with Docker's default bridge networking. `--network host` is required so the container can see Chromecast devices on the LAN.
 
@@ -189,8 +189,8 @@ docker run --network host -e CATT_SERVER_SECRET=your-secret catt-api
 
 ```bash
 # Build and start
-docker build -t catt-api ./catt_server
-docker run --network host -e CATT_SERVER_SECRET=your-secret catt-api
+docker build -t catt-api ./catt_backend
+docker run --network host -e CATT_BACKEND_SECRET=your-secret catt-api
 
 # Test volume
 curl -X POST http://localhost:5000/catt \

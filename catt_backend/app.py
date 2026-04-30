@@ -240,7 +240,7 @@ class _ValidationError(Exception):
 
 @app.route("/catt", methods=["POST"])
 def handle_catt():
-    secret = os.environ.get("CATT_SERVER_SECRET")
+    secret = os.environ.get("CATT_BACKEND_SECRET")
     if secret and request.headers.get("X-Catt-Secret") != secret:
         return _err("Unauthorized", "Unauthorized", 401)
 

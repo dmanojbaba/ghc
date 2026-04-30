@@ -1,4 +1,4 @@
-name: catt-server
+name: catt-backend
 
 concurrency:
   group: ci
@@ -9,10 +9,10 @@ on:
   schedule:
     - cron: "5 5 * * 0" # every Sunday at 5:05 AM
   pull_request:
-    paths: [ catt_server/** ]
+    paths: [ catt_backend/** ]
   push:
     branches: [ main ]
-    paths: [ catt_server/** ]
+    paths: [ catt_backend/** ]
 
 env:
   IMAGE_NAME: "catt"
@@ -28,11 +28,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        working-directory: catt_server
+        working-directory: catt_backend
         run: pip install -r requirements.txt pytest
 
       - name: Run tests
-        working-directory: catt_server
+        working-directory: catt_backend
         run: pytest tests/
 
   build-and-push:
@@ -57,7 +57,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
-          context: ./catt_server
+          context: ./catt_backend
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: |

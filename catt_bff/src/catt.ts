@@ -49,7 +49,7 @@ export async function castCommand(
     body: JSON.stringify(body),
   });
 
-  if (!res.ok) throw new Error(`catt_server error: ${res.status}`);
+  if (!res.ok) throw new Error(`catt_backend error: ${res.status}`);
   return res.json() as Promise<CattResponse>;
 }
 
@@ -60,7 +60,7 @@ export async function getStatus(serverUrl: string, device: string, secret?: stri
     body: JSON.stringify({ device, command: "status" }),
   });
 
-  if (!res.ok) throw new Error(`catt_server error: ${res.status}`);
+  if (!res.ok) throw new Error(`catt_backend error: ${res.status}`);
   return res.json() as Promise<CattStatusResponse>;
 }
 
@@ -71,6 +71,6 @@ export async function getInfo(serverUrl: string, device: string, secret?: string
     body: JSON.stringify({ device, command: "info" }),
   });
 
-  if (!res.ok) throw new Error(`catt_server error: ${res.status}`);
+  if (!res.ok) throw new Error(`catt_backend error: ${res.status}`);
   return res.json() as Promise<CattInfoResponse>;
 }

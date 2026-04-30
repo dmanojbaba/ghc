@@ -28,7 +28,8 @@ new_sqlite_classes = ["DeviceQueue"]
 crons = ["3 3 * * *"]
 
 # Secrets (set via `wrangler secret put`):
-# CATT_SERVER_URL
+# CATT_BACKEND_URL
+# CATT_BACKEND_SECRET
 # SLACK_SIGNING_SECRET
 # TELEGRAM_ALLOWED_CHAT_IDS
 # TELEGRAM_BOT_TOKEN

@@ -21,8 +21,8 @@ pytest tests/test_validation.py::test_missing_command
 python app.py --debug
 
 # Docker build and run (must use --network host for mDNS Chromecast discovery)
-docker build -t catt-server .
-docker run --network host -e CATT_SERVER_SECRET=your-secret catt-server
+docker build -t catt-backend .
+docker run --network host -e CATT_BACKEND_SECRET=your-secret catt-backend
 ```
 
 ## Architecture
@@ -34,7 +34,7 @@ Single-file Flask REST API (`app.py`) wrapping the [`catt`](https://github.com/s
 ```
 POST /catt  {command, device?, value?, ...}
      │
-     ├── auth check (X-Catt-Secret header vs CATT_SERVER_SECRET env var)
+     ├── auth check (X-Catt-Secret header vs CATT_BACKEND_SECRET env var)
      ├── JSON validation
      ├── command lookup in ACTION_HANDLERS
      └── executor.submit(handler)  ← ThreadPoolExecutor, 45s timeout
@@ -84,7 +84,7 @@ Non-serialisable types (`UUID`, `datetime`, `date`) are converted to strings by 
 
 ### Auth
 
-Optional. If `CATT_SERVER_SECRET` env var is set, all requests must include `X-Catt-Secret: <secret>` header. Auth is skipped if the env var is absent (useful for local dev).
+Optional. If `CATT_BACKEND_SECRET` env var is set, all requests must include `X-Catt-Secret: <secret>` header. Auth is skipped if the env var is absent (useful for local dev).
 
 ### Local file casting
 

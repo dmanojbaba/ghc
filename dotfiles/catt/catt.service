@@ -15,7 +15,7 @@ ExecStart=/usr/bin/docker run --rm \
 	--name catt \
 	--network host \
 	--volume /home/pi/dotfiles/catt/catt.cfg:/root/.config/catt/catt.cfg \
-	-e CATT_SERVER_SECRET \
+	-e CATT_BACKEND_SECRET \
 	dmanojbaba/catt:latest
 
 ExecStop=/usr/bin/docker stop catt

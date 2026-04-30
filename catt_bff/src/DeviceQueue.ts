@@ -60,11 +60,11 @@ export class DeviceQueue implements DurableObject {
   }
 
   private get serverUrl(): string {
-    return this.env.CATT_SERVER_URL;
+    return this.env.CATT_BACKEND_URL;
   }
 
   private get secret(): string | undefined {
-    return this.env.CATT_SERVER_SECRET || undefined;
+    return this.env.CATT_BACKEND_SECRET || undefined;
   }
 
   private recordHistory(url: string): void {

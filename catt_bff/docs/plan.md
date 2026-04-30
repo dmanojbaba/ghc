@@ -2,7 +2,7 @@
 
 ## Context
 
-`catt_server` is a LAN-only Flask REST API for controlling Chromecast devices. This BFF runs on Cloudflare Workers and adds:
+`catt_backend` is a LAN-only Flask REST API for controlling Chromecast devices. This BFF runs on Cloudflare Workers and adds:
 
 - **Per-device play queues** — SQLite-backed queue in a Durable Object
 - **Automatic queue advancement** — DO Alarms use smart scheduling via `getInfo` to advance the queue when playback ends
@@ -10,12 +10,12 @@
 - **YouTube URL normalisation** — handles youtu.be, youtube.com/watch, embed, playlist URLs
 - **YouTube playlist shuffle** — fetches playlist items and queues them for sequential playback
 - **TTS** — renders text as an HTML page served via `cast_site` on TV devices, or calls `tts` command on others
-- **Slack & Telegram integration** — webhook endpoints that translate slash commands into `catt_server` calls
+- **Slack & Telegram integration** — webhook endpoints that translate slash commands into `catt_backend` calls
 - **Ad-hoc POST endpoint** — `POST /catt` for curl usage; supports `cast`, `site`, `play`, `stop`, `prev`, `next` commands with optional device override
 
 Based on a working single-device prototype (`old_bff.py`) which used Cloudflare KV for state. The key architectural change is replacing KV with a **single Durable Object** (SQLite-backed) to support an ordered queue and DO Alarms for automatic advancement.
 
-`catt_server` is exposed via **Cloudflare Tunnel** (`cloudflared`), keeping it LAN-only. Deployed at `<your-worker-domain>`.
+`catt_backend` is exposed via **Cloudflare Tunnel** (`cloudflared`), keeping it LAN-only. Deployed at `<your-worker-domain>`.
 
 ---
 
@@ -33,7 +33,7 @@ Cloudflare Worker (catt_bff)  — <your-worker-domain>
    ├── GET/POST /echo           → TTS HTML renderer (for cast_site)
    ├── /device/:name/*          → DeviceQueue DO
    │     ├── SQLite: queue + kv tables
-   │     └── Alarm: polls catt_server + advances queue
+   │     └── Alarm: polls catt_backend + advances queue
    ├── POST /slack              → integrations.ts
    ├── POST /telegram           → integrations.ts
    └── POST /catt               → cattHandler.ts (ad-hoc POST endpoint)
@@ -48,7 +48,7 @@ catt_bff/
 ├── src/
 │   ├── index.ts              # Worker entrypoint — routing + cron handler
 │   ├── DeviceQueue.ts        # Durable Object — queue, state, alarm
-│   ├── catt.ts               # catt_server HTTP client
+│   ├── catt.ts               # catt_backend HTTP client
 │   ├── googleHome.ts         # SYNC / QUERY / EXECUTE handlers
 │   ├── integrations.ts       # Slack & Telegram webhook handlers
 │   ├── cattHandler.ts        # Ad-hoc POST endpoint handler
@@ -73,7 +73,7 @@ catt_bff/
 
 Single logical device (`id: "box"`) representing all Chromecasts. Inputs map to physical devices:
 
-| Input key | catt_server device name |
+| Input key | catt_backend device name |
 |---|---|
 | `k`   | Mini Kitchen  |
 | `o`   | Mini Office   |
@@ -88,7 +88,7 @@ Channels: `ping` (1), `sun` / Sun News (2), `pttv` / Tamil News (3), `london` (4
 
 Default channel on power-on: `ping` (1).
 
-`INPUT_TO_DEVICE` maps input key → full catt_server device name string.
+`INPUT_TO_DEVICE` maps input key → full catt_backend device name string.
 
 Helper functions:
 - `getAppKey(deviceId, input, fallback)` — resolves app key or synonym → canonical key; fallback is non-nullable
@@ -96,7 +96,7 @@ Helper functions:
 - `getAdjacentInput(deviceId, currentKey, delta)` — returns the input key ±delta positions away (wraps around); used by `NextInput`/`PreviousInput`
 - `getChannelCode(deviceId, channelNumber)` — resolves channel number → key
 - `getAdjacentChannel(deviceId, currentKey, delta)` — returns the channel key ±delta positions away (wraps around); used by `relativeChannel`
-- `resolveDevice(input)` — maps input key → catt_server device name
+- `resolveDevice(input)` — maps input key → catt_backend device name
 - `isAudioOnlyInput(deviceId, inputKey)` — returns `true` if any `name_synonym` for the input starts with `"mini"`; used to auto-reset `app` to `default` when switching to audio-only devices
 
 ---
@@ -143,7 +143,7 @@ The `kv` table replaces Cloudflare KV from the prototype. The `history` table st
 | `playlist` | `""` | YouTube playlist ID used by `mediaShuffle`; set via `/box/set/playlist/:id` |
 | `sleep_at` | `DEFAULT_SLEEP_AT` (`""`) | Unix ms timestamp for sleep timer; empty when unset. Checked in `alarm()` before session guard — fires `clear()` when due even if session is idle. |
 
-Volume is not stored in kv and is not returned in `getState()`. `setVolume` via Google Home sends the command to catt_server but does not write to kv. Google Home QUERY returns `DEFAULT_VOLUME` (10) as a static placeholder — matches `volumeMaxLevel: 10`.
+Volume is not stored in kv and is not returned in `getState()`. `setVolume` via Google Home sends the command to catt_backend but does not write to kv. Google Home QUERY returns `DEFAULT_VOLUME` (10) as a static placeholder — matches `volumeMaxLevel: 10`.
 
 ### State Machine
 
@@ -181,7 +181,7 @@ IDLE ──(enqueue when idle)──► ACTIVE
 |---|---|
 | `enqueue(url, title?)` | Add to queue; if `session == idle`, call `advance()` immediately |
 | `advance(userInitiated?)` | Pop next from queue; if empty + `userInitiated=true` → cast `DEFAULT_NEXT` (ping), set `session=idle`, cancel alarm; if empty + not user-initiated → set `session=idle`, cancel alarm, nothing cast; else cast item URL, set `session=active`, set alarm in 30s (settle) |
-| `clear()` | Stop catt_server, cancel alarm, clear queue, reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` to defaults (preserves `app`, `device`, `playlist`) |
+| `clear()` | Stop catt_backend, cancel alarm, clear queue, reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` to defaults (preserves `app`, `device`, `playlist`) |
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 30s (settle) |
 | `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `session=active`, schedule alarm |
 | `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if PLAYING/BUFFERING → set `session=active`, smart schedule; if playing without duration (live stream) → cancel alarm; if PAUSED → set `session=paused`, poll every 60s; if `getInfo` fails → `getStatus` fallback |
@@ -195,18 +195,18 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 |---|---|---|
 | `GET` | `/device/box/state` | Return `getState()` as pretty-printed JSON (`Cache-Control: no-store`). Includes `queue` as `{ position, url }[]`, `sleep_at` as ISO string or null. |
 | `GET` | `/device/box/history` | Return last 10 played URLs as `{ position, url, played_at }[]` newest-first (`Cache-Control: no-store`). Excludes TTS and cast_site. |
-| `GET` | `/device/box/play` | `play_toggle` on catt_server |
+| `GET` | `/device/box/play` | `play_toggle` on catt_backend |
 | `GET` | `/device/box/prev` | `playPrev()` |
 | `GET` | `/device/box/next` | `advance()` |
-| `GET` | `/device/box/stop` | Stop catt_server + clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` |
-| `GET` | `/device/box/clear` | Clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` — no catt_server call |
+| `GET` | `/device/box/stop` | Stop catt_backend + clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` |
+| `GET` | `/device/box/clear` | Clear queue + cancel alarm + reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` — no catt_backend call |
 | `GET/POST` | `/device/box/cast/:url` | GET: `enqueue(url)`; POST: `enqueue(body.url, body.title)` |
 | `GET/POST` | `/device/box/site/:arg` | Stop + clear queue + cancel alarm + set `session=idle`; cast_site URL if http, else TTS (HTML on TV via `/echo?text=`, `tts` command on others) |
 | `GET` | `/device/box/shuffle` | `shuffle(playlist)` using saved `playlist` state key |
-| `GET` | `/device/box/mute/:bool` | `volumemute` on catt_server; `true` = mute (default), `false` = unmute |
-| `GET` | `/device/box/unmute` | `volumemute false` on catt_server; alias for `mute/false` |
-| `GET` | `/device/box/rewind/:seconds` | Rewind N seconds on catt_server (default 30) |
-| `GET` | `/device/box/ffwd/:seconds` | Fast-forward N seconds on catt_server (default 30) |
+| `GET` | `/device/box/mute/:bool` | `volumemute` on catt_backend; `true` = mute (default), `false` = unmute |
+| `GET` | `/device/box/unmute` | `volumemute false` on catt_backend; alias for `mute/false` |
+| `GET` | `/device/box/rewind/:seconds` | Rewind N seconds on catt_backend (default 30) |
+| `GET` | `/device/box/ffwd/:seconds` | Fast-forward N seconds on catt_backend (default 30) |
 | `GET` | `/device/box/sleep/:minutes` | Set sleep timer; if session idle, sets alarm directly to `sleep_at` |
 | `GET` | `/device/box/sleep/cancel` | Clear `sleep_at` kv key |
 | `GET` | `/device/box/set/:key/:value` | Set a kv state key; setting `device` to an audio-only input auto-resets `app` to `default` |
@@ -215,7 +215,7 @@ All paths use the `/device/box/` prefix — both from external HTTP requests for
 
 | | `/clear` | `/stop` | `OnOff` on | `OnOff` off |
 |---|---|---|---|---|
-| Calls catt_server `stop` | No | Yes | No | Yes |
+| Calls catt_backend `stop` | No | Yes | No | Yes |
 | Clears queue | Yes | Yes | Yes | Yes |
 | Cancels alarm | Yes | Yes | Yes | Yes |
 | Resets `session` | Yes | Yes | Yes | Yes |
@@ -258,7 +258,7 @@ getStatus(serverUrl, device, secret?): Promise<CattStatusResponse>
 getInfo(serverUrl, device, secret?): Promise<CattInfoResponse>
 ```
 
-Posts to `POST /catt` on catt_server. `force_default` is passed as `extra` when needed by callers. `secret` is sent as `X-Catt-Secret` header when provided. `getInfo` returns `player_state`, `duration`, and `current_time` in one call — used by `alarm()` for smart scheduling. `getStatus` is used as a fallback when `getInfo` fails.
+Posts to `POST /catt` on catt_backend. `force_default` is passed as `extra` when needed by callers. `secret` is sent as `X-Catt-Secret` header when provided. `getInfo` returns `player_state`, `duration`, and `current_time` in one call — used by `alarm()` for smart scheduling. `getStatus` is used as a fallback when `getInfo` fails.
 
 ---
 
@@ -288,25 +288,25 @@ Calls DO `getState()`, maps to Google state shape. Returns `currentToggleSetting
 
 | Google Command | Action |
 |---|---|
-| `OnOff` (on) | Call `/box/clear` (clears queue + alarm, no catt_server call), then set `app=youtube`, `device=otv` |
-| `OnOff` (off) | Call `/box/stop` (stops catt_server + clears queue + alarm); `app` and `device` left unchanged |
+| `OnOff` (on) | Call `/box/clear` (clears queue + alarm, no catt_backend call), then set `app=youtube`, `device=otv` |
+| `OnOff` (off) | Call `/box/stop` (stops catt_backend + clears queue + alarm); `app` and `device` left unchanged |
 | `SetToggles` | `youtube_app` toggle: `true` → `app=youtube`, `false` → `app=default` in DO |
 | `SetInput` | Update `device` state in DO |
 | `NextInput` / `PreviousInput` | Cycle to adjacent input via `getAdjacentInput` (±1, wraps around); update `device` state in DO |
-| `selectChannel` | Call `/clear` (reset queue/alarm, no catt_server call), store channel key via `/set/channel/:key`, then cast immediately via `/cast/:url` — URL resolved via `getParsedUrl` |
+| `selectChannel` | Call `/clear` (reset queue/alarm, no catt_backend call), store channel key via `/set/channel/:key`, then cast immediately via `/cast/:url` — URL resolved via `getParsedUrl` |
 | `relativeChannel` | Read `channel` from DO state, compute adjacent channel via `getAdjacentChannel` (wraps around), call `/clear`, store via `/set/channel/:key`, then cast immediately via `/cast/:url` |
 | `returnChannel` | `playPrev()` |
 | `mediaShuffle` | `shuffle()` using saved `playlist` state key |
 | `mediaPrevious` | `playPrev()` |
 | `mediaNext` | `advance()` |
-| `mediaResume` / `mediaPause` | `play_toggle` on catt_server |
+| `mediaResume` / `mediaPause` | `play_toggle` on catt_backend |
 | `mediaStop` | `clear()` |
 | `appSelect` | Resolve `newApplication` or `newApplicationName` via `getAppKey`; update `app` state in DO |
 | `appInstall` / `appSearch` | Search YouTube via redirect worker (`/r/<encoded-query>`) using `newApplicationName ?? newApplication`; call `/clear` then cast immediately |
-| `mediaSeekRelative` | Positive `relativePositionMs` → `ffwd`; negative → `rewind` on catt_server (converted ms → seconds) |
-| `setVolume` | `volume` on catt_server (Google 0–10 × 10 → catt 0–100); not written to kv |
-| `volumeRelative` | `volumeup` or `volumedown` on catt_server (steps × 10%); no stored volume needed |
-| `mute` | `volumemute` on catt_server with boolean `mute` param; `volumeCanMuteAndUnmute` is `false` so Google Home does not advertise this capability |
+| `mediaSeekRelative` | Positive `relativePositionMs` → `ffwd`; negative → `rewind` on catt_backend (converted ms → seconds) |
+| `setVolume` | `volume` on catt_backend (Google 0–10 × 10 → catt 0–100); not written to kv |
+| `volumeRelative` | `volumeup` or `volumedown` on catt_backend (steps × 10%); no stored volume needed |
+| `mute` | `volumemute` on catt_backend with boolean `mute` param; `volumeCanMuteAndUnmute` is `false` so Google Home does not advertise this capability |
 
 ### DISCONNECT
 Returns `{}`.
@@ -317,7 +317,7 @@ Returns `{}`.
 
 | Method | Path | Behaviour |
 |---|---|---|
-| `POST` | `/slack` | Parse `text` form field → `<command> <device> <url_or_value>`, dispatch to DO or catt_server |
+| `POST` | `/slack` | Parse `text` form field → `<command> <device> <url_or_value>`, dispatch to DO or catt_backend |
 | `POST` | `/telegram` | Parse `message.text` → `<command> <device> <url_or_value>`, verify secret header, dispatch |
 
 ### Command syntax
@@ -328,8 +328,8 @@ Returns `{}`.
 
 | Command | Routes via | Notes |
 |---|---|---|
-| `cast` | catt_server directly | URL resolved via `getParsedUrl` |
-| `volume` | catt_server directly | Value is int 0–100 |
+| `cast` | catt_backend directly | URL resolved via `getParsedUrl` |
+| `volume` | catt_backend directly | Value is int 0–100 |
 | `mute` | DeviceQueue DO (`/box/mute/:bool`) | No value = mute; `false` = unmute; uses stored `device` key |
 | `unmute` | DeviceQueue DO (`/box/unmute`) | Alias for `mute false`; uses stored `device` key |
 | `play` | DeviceQueue DO (`/box/play`) | Uses stored `device` key; `device` arg ignored |
@@ -369,14 +369,14 @@ Single endpoint for ad-hoc curl usage.
 | `cast` | input key or name | URL or redirect key | Clear queue + cancel alarm, cast immediately, update `prev`, record history, schedule alarm |
 | `cast` | `queue` | URL or redirect key | Enqueue via `getParsedUrl`; plays immediately if idle, appends otherwise |
 | `site` | input key, name, or omit | URL → `cast_site`; plain text → TTS (HTML on TV, spoken on audio device) | Stop + clear queue + cancel alarm |
-| `play` | — | — | Toggle play/pause on catt_server |
-| `stop` | — | — | Stop catt_server + clear queue + cancel alarm + reset `sleep_at` |
+| `play` | — | — | Toggle play/pause on catt_backend |
+| `stop` | — | — | Stop catt_backend + clear queue + cancel alarm + reset `sleep_at` |
 | `prev` | — | — | Play previous |
 | `next` | — | — | Advance queue; casts ping if queue empty |
-| `mute` | — | omit or `true` = mute, `false` = unmute | `volumemute` on catt_server |
-| `unmute` | — | — | `volumemute false` on catt_server; alias for `mute` with `value=false` |
-| `rewind` | — | seconds (default 30) | Rewind on catt_server |
-| `ffwd` | — | seconds (default 30) | Fast-forward on catt_server |
+| `mute` | — | omit or `true` = mute, `false` = unmute | `volumemute` on catt_backend |
+| `unmute` | — | — | `volumemute false` on catt_backend; alias for `mute` with `value=false` |
+| `rewind` | — | seconds (default 30) | Rewind on catt_backend |
+| `ffwd` | — | seconds (default 30) | Fast-forward on catt_backend |
 | `sleep` | — | minutes or `cancel` | Set or cancel sleep timer |
 
 `device` accepts aliases (`k`, `o`, `otv`) or full names (`Mini Kitchen`, `Office TV`). `"queue"` is a special value for `cast` that enqueues instead of casting immediately.
@@ -443,8 +443,8 @@ crons = ["3 3 * * *"]   # 03:03 UTC daily — clear all device queues
 | Secret | Description |
 |---|---|
 | `CATT_API_KEY` | Shared secret required on all non-Google routes via `X-API-Key` header; if unset, auth is skipped (dev mode) |
-| `CATT_SERVER_SECRET` | Shared secret sent to catt_server via `X-Catt-Secret` header on every outbound call; if unset, header is omitted |
-| `CATT_SERVER_URL` | Cloudflare Tunnel URL for catt_server |
+| `CATT_BACKEND_SECRET` | Shared secret sent to catt_backend via `X-Catt-Secret` header on every outbound call; if unset, header is omitted |
+| `CATT_BACKEND_URL` | Cloudflare Tunnel URL for catt_backend |
 | `TELEGRAM_SECRET_TOKEN` | Validates incoming Telegram webhook requests |
 | `YOUTUBE_API_KEY` | Google YouTube Data API v3 key (for playlist fetching) |
 
@@ -472,8 +472,8 @@ ingress:
 cd catt_bff
 npm install
 wrangler secret put CATT_API_KEY
-wrangler secret put CATT_SERVER_SECRET
-wrangler secret put CATT_SERVER_URL
+wrangler secret put CATT_BACKEND_SECRET
+wrangler secret put CATT_BACKEND_URL
 wrangler secret put TELEGRAM_SECRET_TOKEN
 wrangler secret put YOUTUBE_API_KEY
 wrangler deploy
@@ -509,8 +509,8 @@ The `mediaShuffle` EXECUTE intent will read this value and populate the queue.
 | No Slack/Telegram | `/slack`, `/telegram` — unified endpoints supporting `cast`, `volume`, `play`, `stop`, `prev`, `next`, `tts` |
 | `/gcatt` — general-purpose GET/POST endpoint | `POST /catt` — clean POST-only endpoint with `cast`, `site`, `queue` commands and optional device override |
 | No audio-only device awareness | Switching input to a Mini device (name starts with "mini") auto-resets `app` to `default` |
-| `prev`/`next` sentinel keys sent raw to catt_server | Bare redirect keys (`pingr2`, `ping`) resolved via `getParsedUrl` before sending to catt_server |
-| `OnOff` on calls `stop` on catt_server | `OnOff` on uses `/clear` — resets queue state only, no catt_server call |
+| `prev`/`next` sentinel keys sent raw to catt_backend | Bare redirect keys (`pingr2`, `ping`) resolved via `getParsedUrl` before sending to catt_backend |
+| `OnOff` on calls `stop` on catt_backend | `OnOff` on uses `/clear` — resets queue state only, no catt_backend call |
 | `OnOff` off resets `app` to `default` | `OnOff` off leaves `app` unchanged |
 | No `volumeRelative` support | `volumeRelative` maps to `volumeup`/`volumedown` — no stored volume needed |
 

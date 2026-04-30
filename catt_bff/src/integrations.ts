@@ -61,9 +61,9 @@ async function dispatchCommand(
     const val = rawValue.trim();
     if (val === "up" || val === "down") {
       const device_ = resolveDevice(device);
-      await castCommand(env.CATT_SERVER_URL, device_, `volume${val}`, undefined, undefined, env.CATT_SERVER_SECRET);
+      await castCommand(env.CATT_BACKEND_URL, device_, `volume${val}`, undefined, undefined, env.CATT_BACKEND_SECRET);
     } else {
-      await castCommand(env.CATT_SERVER_URL, resolveDevice(device), "volume", Number(val), undefined, env.CATT_SERVER_SECRET);
+      await castCommand(env.CATT_BACKEND_URL, resolveDevice(device), "volume", Number(val), undefined, env.CATT_BACKEND_SECRET);
     }
     return "volume";
   }

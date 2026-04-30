@@ -20,8 +20,8 @@ async function makeSlackSignature(secret: string, timestamp: string, body: strin
 function makeEnv(overrides: Partial<Env> = {}): Env {
   return {
     CATT_API_KEY: "api-key",
-    CATT_SERVER_SECRET: "server-secret",
-    CATT_SERVER_URL: "https://catt.example.com",
+    CATT_BACKEND_SECRET: "server-secret",
+    CATT_BACKEND_URL: "https://catt.example.com",
     SLACK_SIGNING_SECRET: SIGNING_SECRET,
     TELEGRAM_ALLOWED_CHAT_IDS: "",
     TELEGRAM_BOT_TOKEN: "test-bot-token",
