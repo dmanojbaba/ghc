@@ -111,6 +111,12 @@ curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
 curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "device", "value": "otv"}'
 
+# App
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "app", "value": "youtube"}'
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "app", "value": "default"}'
+
 # Channel
 curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "channel", "value": "up"}'
