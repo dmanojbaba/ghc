@@ -41,6 +41,7 @@ Commands and device names are case-insensitive. Telegram commands may be prefixe
 | `sleep` | `sleep 30` | active | Stop playback after N minutes. |
 | `sleep` | `sleep cancel` | active | Cancel a pending sleep timer. |
 | `device` | `device otv` | — | Set active device (key or name). |
+| `otv` | `otv` | — | Shorthand — bare device alias sets active device. |
 | `channel` | `channel up` | active | Switch to next channel. |
 | `channel` | `channel down` | active | Switch to previous channel. |
 | `channel` | `channel sun` | active | Switch to named channel (key or name). |

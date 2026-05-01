@@ -427,3 +427,68 @@ describe("handleTelegram — clear and reset send state reply", () => {
     expect(body.text).toContain('"session"');
   });
 });
+
+describe("handleSlack — bare device alias shorthand", () => {
+  it("treats bare known alias as device command and returns state", async () => {
+    const env = makeEnv();
+    const state = { session: "idle", device: "k" };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("k", env);
+    const res = await handleSlack(request, env, ctx, stub);
+    expect(ctx.waitUntil).not.toHaveBeenCalled();
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/set/device/k");
+    const text = await res.text();
+    expect(text).toContain('"device"');
+    expect(text).toContain('"k"');
+  });
+
+  it("treats bare full device name as device command", async () => {
+    const env = makeEnv();
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response("{}");
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("otv", env);
+    await handleSlack(request, env, ctx, stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/set/device/otv");
+  });
+});
+
+describe("handleTelegram — bare device alias shorthand", () => {
+  it("sets device and sends state reply for bare alias", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const state = { session: "idle", device: "otv" };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const env = makeEnv();
+    await handleTelegram(makeTelegramRequest("otv", 111), env, stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/set/device/otv");
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toContain('"device"');
+  });
+
+  it("does not call set/device for unknown alias", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("unknowncmd", 111), env, stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.every((c: unknown[]) => !(c[0] as Request).url.includes("/set/device"))).toBe(true);
+  });
+});

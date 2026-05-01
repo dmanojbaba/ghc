@@ -133,6 +133,13 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
+  if (command in INPUT_TO_DEVICE) {
+    await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(command)}`));
+    const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+    const json = await res.json();
+    return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
+  }
+
   const { device, rawValue } = parseTokens(rest);
 
   if (command === "device" || command === "clear" || command === "reset") {
@@ -195,6 +202,16 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
       return Response.json({});
     }
+  }
+
+  if (command in INPUT_TO_DEVICE) {
+    await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(command)}`));
+    if (chatId && env.TELEGRAM_BOT_TOKEN) {
+      const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+      const json = await res.json();
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
+    }
+    return Response.json({});
   }
 
   const { device, rawValue } = parseTokens(rest);
