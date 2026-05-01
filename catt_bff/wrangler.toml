@@ -30,6 +30,7 @@ crons = ["3 3 * * *"]
 # Secrets (set via `wrangler secret put`):
 # CATT_BACKEND_URL
 # CATT_BACKEND_SECRET
+# REDIRECT_URL
 # SLACK_SIGNING_SECRET
 # TELEGRAM_ALLOWED_CHAT_IDS
 # TELEGRAM_BOT_TOKEN

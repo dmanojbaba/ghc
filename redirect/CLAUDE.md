@@ -22,7 +22,7 @@ npx vitest run src/tests/index.test.js
 
 ## Architecture
 
-Single-file Cloudflare Worker (`src/index.js`). URL shortener and redirect service deployed at `r.manojbaba.com`.
+Single-file Cloudflare Worker (`src/index.js`). URL shortener and redirect service deployed at `redirect.example.com`.
 
 ### Routes (GET)
 

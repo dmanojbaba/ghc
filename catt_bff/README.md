@@ -1,6 +1,6 @@
 # catt_bff
 
-Cloudflare Worker BFF for controlling Chromecast devices. Deployed at `ghc.manojbaba.com`.
+Cloudflare Worker BFF for controlling Chromecast devices. Deployed at `bff.example.com`.
 
 ## Devices
 
@@ -54,75 +54,75 @@ Ad-hoc HTTP endpoint for curl usage. Requires `X-API-Key` header.
 
 ```bash
 # Cast a URL immediately
-curl -X POST https://ghc.manojbaba.com/catt \
+curl -X POST https://bff.example.com/catt \
   -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' \
   -d '{"command": "cast", "device": "otv", "value": "https://youtu.be/abc123"}'
 
 # Add to queue
-curl -X POST https://ghc.manojbaba.com/catt \
+curl -X POST https://bff.example.com/catt \
   -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' \
   -d '{"command": "cast", "device": "queue", "value": "https://youtu.be/abc123"}'
 
 # TTS
-curl -X POST https://ghc.manojbaba.com/catt \
+curl -X POST https://bff.example.com/catt \
   -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' \
   -d '{"command": "site", "device": "otv", "value": "Hello World"}'
 
 # Playback controls
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "play"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "stop"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "prev"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "next"}'
 
 # State reset
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "clear"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "reset"}'
 
 # Seek
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "rewind", "value": "60"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "ffwd", "value": "30"}'
 
 # Sleep timer
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "sleep", "value": "30"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "sleep", "value": "cancel"}'
 
 # Mute / unmute
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "mute"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "mute", "value": "false"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "unmute"}'
 
 # Device
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "device", "value": "otv"}'
 
 # App
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "app", "value": "youtube"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "app", "value": "default"}'
 
 # Channel
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "channel", "value": "up"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "channel", "value": "down"}'
-curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+curl -X POST https://bff.example.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "channel", "value": "sun"}'
 ```
 
@@ -131,7 +131,7 @@ curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
 Returns the list of available input devices. Requires `X-API-Key` header.
 
 ```bash
-curl https://ghc.manojbaba.com/devices -H 'X-API-Key: <key>'
+curl https://bff.example.com/devices -H 'X-API-Key: <key>'
 ```
 
 Response:
@@ -151,7 +151,7 @@ Response:
 Returns the list of available channels sorted by number. Requires `X-API-Key` header.
 
 ```bash
-curl https://ghc.manojbaba.com/channels -H 'X-API-Key: <key>'
+curl https://bff.example.com/channels -H 'X-API-Key: <key>'
 ```
 
 Response:

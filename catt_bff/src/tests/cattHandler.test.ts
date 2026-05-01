@@ -15,12 +15,13 @@ function makeEnv(): Env {
     TELEGRAM_BOT_TOKEN: "",
     TELEGRAM_SECRET_TOKEN: "",
     YOUTUBE_API_KEY: "",
+    REDIRECT_URL: process.env.REDIRECT_URL!,
     DEVICE_QUEUE: {} as DurableObjectNamespace,
   };
 }
 
 function makeRequest(body: Record<string, unknown>) {
-  return new Request("https://ghc.manojbaba.com/catt", {
+  return new Request("https://bff.example.com/catt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

@@ -239,12 +239,12 @@ getPlaylistItems(apiKey: string, playlistId: string, maxResults = 10): Promise<{
 
 Resolution order for `getParsedUrl`:
 1. `ytVideoId=true` → prepend `BASE_YOUTUBE` (checked first, before URL parsing)
-2. Already `r.manojbaba.com` → return as-is
+2. Already `redirect.example.com` → return as-is
 3. `youtu.be/<id>` → full YouTube URL
 4. `youtube.com/watch`, `/embed/`, `/v/` → extract video ID
 5. `youtube.com` + `ytPlaylist=true` → extract `list` param
 6. Starts with `http` → return as-is
-7. Bare string → `encodeURIComponent` + prepend `BASE_REDIRECT` (`https://r.manojbaba.com/r/<encoded>`) — encoding required so multi-word queries survive the redirect worker's `decodeURIComponent`
+7. Bare string → `encodeURIComponent` + prepend `BASE_REDIRECT` (`https://redirect.example.com/r/<encoded>`) — encoding required so multi-word queries survive the redirect worker's `decodeURIComponent`
 
 `getPlaylistItems` calls YouTube Data API v3, returns `{ first, rest }` where `first` is the first video URL and `rest` is an array of remaining URLs.
 

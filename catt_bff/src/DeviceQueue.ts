@@ -103,7 +103,7 @@ export class DeviceQueue implements DurableObject {
     if (!row) {
       if (userInitiated) {
         const device = resolveDevice(this.get("device"));
-        await castCommand(this.serverUrl, device, "cast", getParsedUrl(DEFAULT_NEXT), {
+        await castCommand(this.serverUrl, device, "cast", getParsedUrl(DEFAULT_NEXT, this.env.REDIRECT_URL), {
           force_default: this.forceDefault(),
         }, this.secret);
       }
@@ -147,7 +147,7 @@ export class DeviceQueue implements DurableObject {
     let first: string;
     let rest: string[];
     try {
-      ({ first, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId));
+      ({ first, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId, this.env.REDIRECT_URL));
     } catch {
       this.set("session", DEFAULT_SESSION);
       await this.state.storage.deleteAlarm();
@@ -193,7 +193,7 @@ export class DeviceQueue implements DurableObject {
     if (rawPrev === "tts") {
       await castCommand(this.serverUrl, device, "tts", this.get("tts"), undefined, this.secret);
     } else {
-      await castCommand(this.serverUrl, device, "cast", getParsedUrl(rawPrev), {
+      await castCommand(this.serverUrl, device, "cast", getParsedUrl(rawPrev, this.env.REDIRECT_URL), {
         force_default: this.forceDefault(),
       }, this.secret);
     }
@@ -373,9 +373,9 @@ export class DeviceQueue implements DurableObject {
           if (!hasValue) {
             await this.advance(true);
           } else if (deviceArg === "queue") {
-            await this.enqueue(getParsedUrl(val));
+            await this.enqueue(getParsedUrl(val, this.env.REDIRECT_URL));
           } else {
-            const parsedUrl = getParsedUrl(val);
+            const parsedUrl = getParsedUrl(val, this.env.REDIRECT_URL);
             this.sql.exec("DELETE FROM queue");
             await this.state.storage.deleteAlarm();
             await castCommand(this.serverUrl, device, "cast", parsedUrl, {
@@ -412,7 +412,7 @@ export class DeviceQueue implements DurableObject {
         await this.clearState();
         this.set("channel", channelKey);
         const device = resolveDevice(this.get("device"));
-        await castCommand(this.serverUrl, device, "cast", getParsedUrl(channelKey), {
+        await castCommand(this.serverUrl, device, "cast", getParsedUrl(channelKey, this.env.REDIRECT_URL), {
           force_default: this.forceDefault(),
         }, this.secret);
         this.set("session", "active");

@@ -4,7 +4,7 @@ Control Chromecast devices over HTTP. Three components:
 
 - **`catt_backend`** — Flask REST API that wraps the [`catt`](https://github.com/skorokithakis/catt) CLI. Runs on the LAN inside Docker, exposed externally via Cloudflare Tunnel.
 - **`catt_bff`** — Cloudflare Worker that sits in front of `catt_backend`, adding per-device play queues, Google Home integration, Slack/Telegram webhooks, and an ad-hoc `POST /catt` endpoint for curl usage.
-- **`redirect`** — Cloudflare Worker for URL shortening and YouTube search. Deployed at `r.manojbaba.com`.
+- **`redirect`** — Cloudflare Worker for URL shortening and YouTube search. Deployed at `redirect.example.com`.
 
 ## Architecture
 
@@ -176,7 +176,7 @@ curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API
 
 ## redirect
 
-Cloudflare Worker (`src/index.js`). URL shortener and redirect service deployed at `r.manojbaba.com`.
+Cloudflare Worker (`src/index.js`). URL shortener and redirect service deployed at `redirect.example.com`.
 
 ```bash
 cd redirect
