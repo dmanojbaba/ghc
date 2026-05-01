@@ -493,3 +493,27 @@ describe("handleTelegram — bare device alias shorthand", () => {
     expect(calls.every((c: unknown[]) => !(c[0] as Request).url.includes("/set/device"))).toBe(true);
   });
 });
+
+describe("handleSlack — tts aliases", () => {
+  it("speak routes to DO /site/ with encoded text", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const request = await makeSlackRequest("speak hello world", env);
+    const res = await handleSlack(request, env, makeCtx(), stub);
+    expect(res.status).toBe(200);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/site/");
+    expect(decodeURIComponent(calls[0][0].url.split("/site/")[1])).toBe("hello world");
+  });
+
+  it("talk routes to DO /site/ with encoded text", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const request = await makeSlackRequest("talk hello world", env);
+    const res = await handleSlack(request, env, makeCtx(), stub);
+    expect(res.status).toBe(200);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/site/");
+    expect(decodeURIComponent(calls[0][0].url.split("/site/")[1])).toBe("hello world");
+  });
+});

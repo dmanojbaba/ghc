@@ -116,7 +116,7 @@ export const DEVICES: DeviceDefinition[] = [
           name: "youtube_app",
           name_values: [
             {
-              name_synonym: ["YouTube", "YouTube app", "YouTube mode"],
+              name_synonym: ["YouTube app"],
               lang: "en",
             },
           ],

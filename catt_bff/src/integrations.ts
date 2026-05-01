@@ -4,26 +4,26 @@ import { resolveDevice, INPUT_TO_DEVICE } from "./devices";
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 
 const HELP_TEXT = `Commands: <command> [device] [value]
-cast [device] [url]  – cast URL (omit for next)
-tts [text]           – speak text
-volume [device] <n>  – set volume 0–100
-volume up/down       – step volume
-mute / unmute        – mute toggle
-play                 – toggle play/pause
-stop                 – stop and clear queue
-clear                – reset state to defaults (keeps device and app)
-reset                – full reset including device and app
-prev                 – replay previous
-next                 – skip to next
-rewind [seconds]     – rewind (default 30s)
-ffwd [seconds]       – fast-forward (default 30s)
-sleep <minutes>      – sleep timer
-sleep cancel         – cancel sleep timer
-channel up/down      – next/previous channel
-channel <name>       – switch to named channel
-device <key>         – set active device
-state                – show device state
-help                 – show this message`;
+cast [device] [url]   – cast URL (omit for next)
+tts/speak/talk [text] – speak text
+volume [device] <n>   – set volume 0–100
+volume up/down        – step volume
+mute / unmute         – mute toggle
+play                  – toggle play/pause
+stop                  – stop and clear queue
+clear                 – reset state to defaults (keeps device and app)
+reset                 – full reset including device and app
+prev                  – replay previous
+next                  – skip to next
+rewind [seconds]      – rewind (default 30s)
+ffwd [seconds]        – fast-forward (default 30s)
+sleep <minutes>       – sleep timer
+sleep cancel          – cancel sleep timer
+channel up/down       – next/previous channel
+channel <name>        – switch to named channel
+device <key>          – set active device
+state                 – show device state
+help                  – show this message`;
 
 function parseTokens(tokens: string[]): { device: string; rawValue: string } {
   const [second = "", ...rest] = tokens;
@@ -56,7 +56,7 @@ async function dispatchCommand(
     await doStub.fetch(new Request(`https://do/device/box/sleep/${encodeURIComponent(arg)}`));
     return "sleep";
   }
-  if (command === "tts") {
+  if (command === "tts" || command === "speak" || command === "talk") {
     await doStub.fetch(new Request(`https://do/device/box/site/${encodeURIComponent(rawValue)}`));
     return "tts";
   }
