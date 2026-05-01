@@ -263,6 +263,28 @@ export function getAdjacentChannel(
   return currentKey;
 }
 
+export function getChannelKey(
+  deviceId: string,
+  input: string,
+): string | null {
+  for (const d of DEVICES) {
+    if (d.id !== deviceId) continue;
+    const channels = d.attributes.availableChannels as Array<{
+      key: string;
+      number: string;
+      names: string[];
+    }>;
+    for (const c of channels) {
+      if (c.key === input) return c.key;
+      if (c.number === input) return c.key;
+      for (const name of c.names) {
+        if (name.toLowerCase() === input.toLowerCase()) return c.key;
+      }
+    }
+  }
+  return null;
+}
+
 export function getChannelCode(
   deviceId: string,
   channelNumber: string,

@@ -14,6 +14,11 @@ export async function handleCatt(request: Request, _env: Env, doStub: DurableObj
     return doStub.fetch(new Request(`https://do/device/box/${body.command}/${arg}`));
   }
 
+  if (body.command === "channel") {
+    const arg = encodeURIComponent(body.value ?? "");
+    return doStub.fetch(new Request(`https://do/device/box/channel/${arg}`));
+  }
+
   return doStub.fetch(new Request("https://do/device/box/catt", {
     method: "POST",
     headers: { "content-type": "application/json" },

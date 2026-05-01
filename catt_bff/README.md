@@ -40,6 +40,9 @@ Commands and device names are case-insensitive. Telegram commands may be prefixe
 | `ffwd` | `ffwd 30` | active | Fast-forward N seconds (default 30). |
 | `sleep` | `sleep 30` | active | Stop playback after N minutes. |
 | `sleep` | `sleep cancel` | active | Cancel a pending sleep timer. |
+| `channel` | `channel up` | active | Switch to next channel. |
+| `channel` | `channel down` | active | Switch to previous channel. |
+| `channel` | `channel sun` | active | Switch to named channel (key or name). |
 | `state` | `state` | active | Return current device state. |
 | `help` | `help` | active | List all supported commands. |
 
@@ -101,6 +104,14 @@ curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "mute", "value": "false"}'
 curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "unmute"}'
+
+# Channel
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "channel", "value": "up"}'
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "channel", "value": "down"}'
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "channel", "value": "sun"}'
 ```
 
 ## GET /device/box/* endpoints
@@ -118,6 +129,9 @@ All require `X-API-Key` header.
 | `GET /device/box/prev` | Replay previous item. |
 | `GET /device/box/next` | Skip to next item in queue. |
 | `GET /device/box/cast/:url` | Enqueue a URL. |
+| `GET /device/box/channel/up` | Switch to next channel. |
+| `GET /device/box/channel/down` | Switch to previous channel. |
+| `GET /device/box/channel/:key` | Switch to channel by key or name. |
 | `GET /device/box/shuffle` | Shuffle the saved YouTube playlist. |
 | `GET /device/box/mute/:bool` | Mute (`true`) or unmute (`false`). Default: mute. |
 | `GET /device/box/unmute` | Unmute. Alias for `mute/false`. |

@@ -264,6 +264,41 @@ describe("handleSlack — command parsing", () => {
   });
 });
 
+describe("handleSlack — channel command", () => {
+  it("routes channel up to DO", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("channel up", env);
+    await handleSlack(request, env, ctx, stub);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect((call[0] as Request).url).toContain("/channel/up");
+  });
+
+  it("routes channel down to DO", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("channel down", env);
+    await handleSlack(request, env, ctx, stub);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect((call[0] as Request).url).toContain("/channel/down");
+  });
+
+  it("routes channel by name to DO", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("channel sun", env);
+    await handleSlack(request, env, ctx, stub);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect((call[0] as Request).url).toContain("/channel/sun");
+  });
+});
+
 describe("handleSlack — clear and reset commands", () => {
   it("routes clear to DO", async () => {
     const env = makeEnv();

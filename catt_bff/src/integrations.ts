@@ -19,6 +19,8 @@ rewind [seconds]     – rewind (default 30s)
 ffwd [seconds]       – fast-forward (default 30s)
 sleep <minutes>      – sleep timer
 sleep cancel         – cancel sleep timer
+channel up/down      – next/previous channel
+channel <name>       – switch to named channel
 state                – show device state
 help                 – show this message`;
 
@@ -66,6 +68,11 @@ async function dispatchCommand(
       await castCommand(env.CATT_BACKEND_URL, resolveDevice(device), "volume", Number(val), undefined, env.CATT_BACKEND_SECRET);
     }
     return "volume";
+  }
+  if (command === "channel") {
+    const arg = rawValue.trim() || device;
+    await doStub.fetch(new Request(`https://do/device/box/channel/${encodeURIComponent(arg)}`));
+    return "channel";
   }
   if (command === "mute") {
     const muted = (rawValue.trim() || "true") !== "false";

@@ -2,7 +2,7 @@ import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems, getParsedUrl } from "./urlHelper";
 import {
   DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_CHANNEL, DEFAULT_SLEEP_AT,
-  resolveDevice, isAudioOnlyInput, getInputKey, DEVICE_ID,
+  resolveDevice, isAudioOnlyInput, getInputKey, getAdjacentChannel, getChannelKey, DEVICE_ID,
 } from "./devices";
 
 const POLL_INTERVAL_MS   = 10_000;
@@ -394,6 +394,29 @@ export class DeviceQueue implements DurableObject {
           return new Response("unknown command", { status: 400 });
         }
 
+        return new Response("ok");
+      }
+
+      case "channel": {
+        const arg = parts[3] ?? "";
+        let channelKey: string;
+        if (arg === "up") {
+          channelKey = getAdjacentChannel(DEVICE_ID, this.get("channel"), 1);
+        } else if (arg === "down") {
+          channelKey = getAdjacentChannel(DEVICE_ID, this.get("channel"), -1);
+        } else {
+          const resolved = getChannelKey(DEVICE_ID, arg);
+          if (!resolved) return new Response("unknown channel", { status: 400 });
+          channelKey = resolved;
+        }
+        await this.clearState();
+        this.set("channel", channelKey);
+        const device = resolveDevice(this.get("device"));
+        await castCommand(this.serverUrl, device, "cast", getParsedUrl(channelKey), {
+          force_default: this.forceDefault(),
+        }, this.secret);
+        this.set("session", "active");
+        await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
         return new Response("ok");
       }
 
