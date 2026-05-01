@@ -52,7 +52,7 @@ catt_frontend/
 │   └── api/
 │       ├── auth.ts           # Kids PIN auth → sets kids session cookie
 │       ├── command.ts        # Validates kids cookie → proxies to catt_bff (rate limited)
-│       ├── state.ts          # Validates kids cookie → returns active device + session
+│       ├── state.ts          # Validates kids cookie → returns active device, session, and prev
 │       ├── devices.ts        # Validates kids cookie → proxies GET /devices from catt_bff
 │       └── admin/
 │           ├── auth.ts       # Admin password auth → sets admin session cookie
@@ -110,13 +110,18 @@ Not implemented in code — Cloudflare WAF rate limiting on auth endpoints handl
 │  Device: [Kitchen] [●Office] [TV]... │  ← active device highlighted; tappable if UI_KIDS_ALLOW_DEVICE_SWITCH=true
 │                                      │    plain text "Device: Office TV" if false
 ├──────────────────────────────────────┤
-│  [preset]  [preset]  [preset]        │  ← BUTTONS_CONFIG rows (section labelled "Favourites")
+│  Now playing: https://...            │  ← hidden until state loads; shows prev from /api/state
+├──────────────────────────────────────┤
+│  Favourites                          │  ← BUTTONS_CONFIG rows
+│  [preset]  [preset]  [preset]        │
 │  [preset]  [preset]                  │
 ├──────────────────────────────────────┤ ← only if UI_KIDS_ALLOW_SEARCH=true
+│  Search                              │
 │  [search input ____________] [Play]  │
 ├──────────────────────────────────────┤
-│  [Prev]  [Play/Pause]  [Stop]  [Next]│  ← always-present playback row
-│       [Vol Down]  [Vol Up]           │
+│  Playback                            │  ← always-present
+│  [Prev] [Play/Pause] [Stop] [Next]   │
+│  [Ch ‹] [Ch ›] [Vol –] [Vol +]       │
 └──────────────────────────────────────┘
 ```
 
@@ -156,30 +161,33 @@ The Pages Function serves `BUTTONS_CONFIG` as JSON at `GET /api/config` (kids co
 ### Layout
 ```
 ┌─────────────────────────────────────────────────┐
-│ Active device: Office TV                         │  ← prominent device display
-│ State: [session] [app] [channel]                 │  ← live state bar (polls /api/admin/state)
-│ Sleep: [sleep_at]   Alarm: [alarm]               │
+│ session: —  alarm: —              [Log out]       │  ← state bar + logout
 ├─────────────────────────────────────────────────┤
-│ Device: [k][o][b][zbk][tv][otv]                  │  ← device switcher
-│ Channel: [up][down] or [name input]              │
+│ Device                          app: —           │  ← device switcher; app shown top-right
+│ [k][o][b][zbk][tv][otv] [● YouTube app]          │  ← YouTube app last; only visible for tv/otv; highlighted when app=youtube
 ├─────────────────────────────────────────────────┤
-│ Cast: [url/search input]          [Cast]         │  ← cast input
-│ TTS:  [text input]                [Speak]        │
+│ Favourites:                                      │  ← admin preset buttons (Stage 8)
+│  [btn] [btn] [btn] [btn] ...                     │    fluid grid (same as kids preset-grid); hidden when empty
 ├─────────────────────────────────────────────────┤
-│ [Prev] [Play/Pause] [Next] [Stop] [Clear][Reset] │  ← playback controls
-│ [Rewind] [FFwd]  seconds: [__]                   │
+│ Cast                                             │  ← cast input
+│ [url/search input ___________________] [Cast]    │
+│ TTS                                              │
+│ [text input _________________________] [Speak]   │
 ├─────────────────────────────────────────────────┤
-│ Volume: [Down] [Up]  Set: [___] [Set]            │  ← volume
-│ [Mute]  [Unmute]                                 │
+│ Playback                                         │  ← playback controls
+│ prev: —                          next: —         │
+│ [Prev] [Play/Pause] [Stop] [Next]                │
+│ [Rewind 30s] [FFwd 30s] [Clear] [Reset]          │
+│ [Ch ‹]  ——channel——  [Ch ›]                      │
 ├─────────────────────────────────────────────────┤
-│ Sleep: [mins: ___] [Set] [Cancel]                │  ← sleep timer
+│ Volume                                           │  ← volume
+│ [0–100 ___] [Set] [Vol –] [Vol +]                │
 ├─────────────────────────────────────────────────┤
-│ Queue:                                           │  ← queue list
-│  1. https://...                                  │
-│  2. https://...                                  │
+│ Sleep timer                   sleep_at: —        │  ← sleep timer
+│ [mins ___] [Set] [Cancel]                        │
 ├─────────────────────────────────────────────────┤
-│ History (last 10):                               │  ← history list
-│  • https://...                                   │
+│ History              │ Queue                     │  ← two-column
+│  • https://...       │  1. https://...           │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -200,7 +208,7 @@ The Pages Function serves `BUTTONS_CONFIG` as JSON at `GET /api/config` (kids co
 - `POST /api/command` — validates kids cookie, reads `{ command, device, value }` from JSON body, forwards to `catt_bff` POST `/catt` with `X-API-Key` header; enforces 60 req/min rate limit per IP
 
 ### `functions/api/state.ts`
-- `GET /api/state` — validates kids cookie, proxies `GET /device/box/state` from `catt_bff`, returns `{ device, session }` — used by kids view to display active device on load
+- `GET /api/state` — validates kids cookie, proxies `GET /device/box/state` from `catt_bff`, returns `{ device, session, prev }` — used by kids view to display active device and now-playing on load
 
 ### `functions/api/devices.ts`
 - `GET /api/devices` — validates kids cookie, proxies `GET /devices` from `catt_bff`, returns device list (`[{ key, name }]`) — fetched once on page load by both kids and admin views; single source of truth from `devices.ts`
@@ -314,12 +322,17 @@ Required GitHub secrets: `CLOUDFLARE_API_TOKEN`
 
 ### Stage 7: App switcher
 **Goal**: Allow admin to switch the active app (e.g. `youtube`, `default`) from the admin UI
-**Implementation**: `POST /api/admin/command` with `{ command: "app", value: "youtube" }` — `catt_bff` already supports this via `cattHandler.ts` (`app` command routes to `set/app/:key` on the DO); admin UI shows toggle buttons for available apps (`default`, `youtube`) with active app highlighted, tapping another posts the command and refreshes state
-**Success Criteria**: Admin can switch app from the UI; state bar reflects the new app after switching
-**Status**: Not Started
+**Implementation**: "YouTube app" toggle button appended after device buttons in the device bar. Only visible when active device is `tv` or `otv`. Highlighted when `app=youtube`, dimmed when `app=default`. Pressing toggles by posting `{ command: "app", value: "youtube" }` or `{ command: "app", value: "default" }` to `/api/admin/command`. `catt_bff` already supports this — `app` command routes to `set/app/:key` on the DO. `app` value moved from state bar to Device section header (top-right).
+**Success Criteria**: Admin can toggle Default app from the UI; button highlight and `app:` label update after switching
+**Status**: Complete
 
 ### Stage 8: Admin-managed favourites
-**Goal**: Allow admin to edit kids favourite buttons from the admin UI instead of Cloudflare dashboard
-**Implementation**: Add a Cloudflare KV namespace (`GHA_BUTTONS`); `GET /api/config` reads KV first, falls back to `BUTTONS_CONFIG` env var; admin UI gets a JSON textarea + save button that writes to KV via a new `POST /api/admin/buttons` endpoint
-**Success Criteria**: Admin can edit and save buttons without touching Cloudflare dashboard; changes take effect immediately; fallback to env var when KV is empty
+**Goal**: Allow admin to edit kids and admin favourite buttons from the admin UI instead of Cloudflare dashboard
+**Implementation**:
+- Add a Cloudflare KV namespace (`GHA_BUTTONS`) with two keys: `kids_buttons` and `admin_buttons`
+- `GET /api/config` reads `kids_buttons` from KV first, falls back to `BUTTONS_CONFIG` env var
+- `POST /api/admin/buttons` accepts `{ role: "kids" | "admin", buttons: [...] }` and writes to the appropriate KV key (admin cookie required)
+- Kids view (`/app`): renders preset buttons from `kids_buttons` (unchanged UX)
+- Admin view (`/admin/app`): new "Favourites" section above the cast input — renders quick-access preset buttons from `admin_buttons` using the same fluid `preset-grid` CSS as the kids view, hidden when empty; below that, a JSON textarea + Save button for editing kids and admin buttons separately
+**Success Criteria**: Admin can edit and save kids and admin buttons without touching Cloudflare dashboard; changes take effect immediately; kids fallback to `BUTTONS_CONFIG` env var when KV is empty; admin favourites empty by default
 **Status**: Not Started

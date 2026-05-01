@@ -233,6 +233,49 @@ describe("GET /api/devices", () => {
   });
 });
 
+// ── kids state proxy ───────────────────────────────────────────────────────
+
+describe("GET /api/state", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  it("returns 401 with no cookie", async () => {
+    const { onRequestGet } = await import("../../functions/api/state.js");
+    const res = await onRequestGet(makeCtx(getRequest(undefined, "/api/state"), BASE_ENV));
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 with admin cookie (role isolation)", async () => {
+    const { onRequestGet } = await import("../../functions/api/state.js");
+    const cookieVal = extractCookieValue(await adminCookieHeader());
+    const res = await onRequestGet(makeCtx(getRequest(cookieVal, "/api/state"), BASE_ENV));
+    expect(res.status).toBe(401);
+  });
+
+  it("returns device, session, and prev from bff state", async () => {
+    const { onRequestGet } = await import("../../functions/api/state.js");
+    const bffState = { device: "otv", session: "active", prev: "https://youtu.be/abc", queue: [] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(bffState), { status: 200 })));
+    const cookieVal = extractCookieValue(await kidsCookieHeader());
+    const res = await onRequestGet(makeCtx(getRequest(cookieVal, "/api/state"), BASE_ENV));
+    expect(res.status).toBe(200);
+    const json = await res.json() as { device: string; session: string; prev: string };
+    expect(json.device).toBe("otv");
+    expect(json.session).toBe("active");
+    expect(json.prev).toBe("https://youtu.be/abc");
+  });
+
+  it("returns undefined prev when bff state has no prev", async () => {
+    const { onRequestGet } = await import("../../functions/api/state.js");
+    const bffState = { device: "otv", session: "idle" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(bffState), { status: 200 })));
+    const cookieVal = extractCookieValue(await kidsCookieHeader());
+    const res = await onRequestGet(makeCtx(getRequest(cookieVal, "/api/state"), BASE_ENV));
+    expect(res.status).toBe(200);
+    const json = await res.json() as { prev?: string };
+    expect(json.prev).toBeUndefined();
+  });
+});
+
 // ── config endpoint ────────────────────────────────────────────────────────
 
 describe("GET /api/config", () => {

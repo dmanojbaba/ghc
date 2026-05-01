@@ -13,6 +13,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   });
   if (!res.ok) return res;
 
-  const state = await res.json<{ device?: string; session?: string }>();
-  return Response.json({ device: state.device, session: state.session });
+  const state = await res.json<{ device?: string; session?: string; prev?: string }>();
+  return Response.json({ device: state.device, session: state.session, prev: state.prev });
 };

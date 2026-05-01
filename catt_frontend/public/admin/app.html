@@ -15,7 +15,6 @@
         <div>
           <div class="state-bar" id="state-bar">
             <span>session: <span class="state-val" id="s-session">—</span></span>
-            <span>app: <span class="state-val" id="s-app">—</span></span>
             <span>alarm: <span class="state-val" id="s-alarm">—</span></span>
           </div>
         </div>
@@ -23,9 +22,12 @@
       </div>
     </div>
 
-    <!-- Device + Channel -->
+    <!-- Device + App -->
     <div class="section">
-      <span class="section-label">Device</span>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="section-label">Device</span>
+        <span style="font-size:0.8rem; color:var(--text2);">app: <span class="state-val" id="s-app">—</span></span>
+      </div>
       <div class="device-bar" id="device-bar"></div>
     </div>
 
@@ -163,6 +165,14 @@
         b.classList.toggle('active', b.dataset.key === activeKey);
       });
 
+      // YouTube app button — only visible for TV devices
+      const ytBtn = document.getElementById('app-youtube-btn');
+      if (ytBtn) {
+        const isTv = TV_KEYS.has(data.device);
+        ytBtn.style.display = isTv ? '' : 'none';
+        ytBtn.classList.toggle('active', data.app === 'youtube');
+      }
+
       // queue
       const queueList = document.getElementById('queue-list');
       const queue = data.queue ?? [];
@@ -218,6 +228,8 @@
       }
     });
 
+    const TV_KEYS = new Set(['tv', 'otv']);
+
     // ── device buttons ────────────────────────────────────────────────
 
     async function loadDevices() {
@@ -232,12 +244,23 @@
           btn.className = 'device-btn';
           btn.textContent = d.name;
           btn.dataset.key = d.key;
-          btn.dataset.cmd = 'device';
           btn.addEventListener('click', () => {
             withLoading(btn, () => postCommand({ command: 'device', value: d.key }));
           });
           bar.appendChild(btn);
         });
+
+        // YouTube app button — appended last, shown only for TV devices
+        const ytBtn = document.createElement('button');
+        ytBtn.className = 'device-btn';
+        ytBtn.id = 'app-youtube-btn';
+        ytBtn.textContent = 'YouTube app';
+        ytBtn.style.display = 'none';
+        ytBtn.addEventListener('click', () => {
+          const next = ytBtn.classList.contains('active') ? 'default' : 'youtube';
+          withLoading(ytBtn, () => postCommand({ command: 'app', value: next }));
+        });
+        bar.appendChild(ytBtn);
       } catch { /* ignore */ }
     }
 
