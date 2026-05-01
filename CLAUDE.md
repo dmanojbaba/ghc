@@ -4,18 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project does
 
-Controls Chromecast devices over HTTP. Three components — each has its own `CLAUDE.md`:
+Controls Chromecast devices over HTTP. Four components — each has its own `CLAUDE.md`:
 
 - **`catt_bff/`** — Cloudflare Worker (TypeScript). Google Home C2C, per-device play queues via Durable Objects, Slack/Telegram webhooks, `POST /catt` endpoint. Deployed at `ghc.manojbaba.com`.
 - **`catt_backend/`** — Flask REST API (Python). Wraps the `catt` CLI. Runs on a Raspberry Pi inside Docker on the LAN, exposed via Cloudflare Tunnel.
+- **`catt_frontend/`** — Cloudflare Pages (TypeScript + HTML). Web UI with a kids view (preset buttons + playback controls) and an admin view (full control surface). PIN auth for kids, password auth for admin.
 - **`redirect/`** — Cloudflare Worker (JavaScript). URL shortener/redirect service. Deployed at `r.manojbaba.com`.
 
 ## Architecture
 
 ```
-Google Assistant / Slack / Telegram
+Browser / Google Assistant / Slack / Telegram
          │
-         ▼
+         ├── catt_frontend  (Cloudflare Pages — kids + admin web UI)
+         │         │
+         ▼         ▼
   catt_bff  (Cloudflare Worker — ghc.manojbaba.com)
          │  Cloudflare Tunnel
          ▼
@@ -64,6 +67,7 @@ All workflows live in `.github/workflows/`:
 |---|---|---|
 | `catt-bff.yml` | Push/PR to `catt_bff/**`, manual | PR: vitest + wrangler dry-run. Merge: vitest + deploy |
 | `catt-backend.yml` | Push/PR to `catt_backend/**`, weekly, manual | PR: pytest + build image. Merge: pytest + build + push to Docker Hub |
+| `catt-frontend.yml` | Push/PR to `catt_frontend/**`, manual | PR: vitest + tsc + pages dry-run. Merge: vitest + tsc + pages deploy |
 | `redirect.yml` | Push/PR to `redirect/**`, manual | Deploy |
 
 Required GitHub secrets: `CLOUDFLARE_API_TOKEN`, `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.

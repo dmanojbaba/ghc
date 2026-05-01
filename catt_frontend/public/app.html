@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>catt</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-wrap" id="app">
+
+    <!-- Device bar -->
+    <div class="section" id="device-section">
+      <div class="device-bar" id="device-bar">
+        <span class="label">Device:</span>
+        <span class="device-text" id="device-text">Loading...</span>
+      </div>
+    </div>
+
+    <!-- Now playing -->
+    <div class="section" id="now-playing-section" hidden>
+      <span style="font-size:0.85rem; color:var(--text2);">Now playing: <span class="state-val" id="now-playing-val" style="word-break:break-all;">—</span></span>
+    </div>
+
+    <!-- Preset buttons -->
+    <div class="section" id="presets-section" hidden>
+      <span class="section-label">Favourites</span>
+      <div class="preset-grid" id="preset-grid"></div>
+    </div>
+
+    <!-- Search row (shown when allowSearch) -->
+    <div class="section" id="search-section" hidden>
+      <span class="section-label">Search</span>
+      <div class="search-row">
+        <input id="search-input" type="text" placeholder="Search or paste a URL..." autocomplete="off">
+        <button class="btn" id="search-btn">Play</button>
+      </div>
+    </div>
+
+    <!-- Playback controls -->
+    <div class="section">
+      <span class="section-label">Playback</span>
+      <div class="playback-row">
+        <button class="btn" data-cmd="prev">Prev</button>
+        <button class="btn" data-cmd="play">Play / Pause</button>
+        <button class="btn" data-cmd="stop">Stop</button>
+        <button class="btn" data-cmd="next">Next</button>
+      </div>
+      <div class="playback-row">
+        <button class="btn" data-cmd="channel" data-value="down">Ch ‹</button>
+        <button class="btn" data-cmd="channel" data-value="up">Ch ›</button>
+        <button class="btn" data-cmd="volume" data-value="down">Vol –</button>
+        <button class="btn" data-cmd="volume" data-value="up">Vol +</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let activeDevice = null;
+    let allowDeviceSwitch = false;
+    let pendingBtn = null;
+
+    // ── helpers ──────────────────────────────────────────────────────
+
+    async function postCommand(body) {
+      const res = await fetch('/api/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 401) window.location.href = '/';
+      return res;
+    }
+
+    function withLoading(btn, fn) {
+      if (pendingBtn) return;
+      pendingBtn = btn;
+      btn.disabled = true;
+      btn.classList.add('loading');
+      const done = () => {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+        pendingBtn = null;
+      };
+      // re-enable after 500ms minimum even on fast responses
+      const timer = setTimeout(done, 500);
+      fn().then(() => { clearTimeout(timer); done(); }).catch(() => { clearTimeout(timer); done(); });
+    }
+
+    // ── device bar ───────────────────────────────────────────────────
+
+    function renderDeviceBar(devices, activeKey, canSwitch) {
+      const bar = document.getElementById('device-bar');
+      bar.innerHTML = '<span class="label">Device:</span>';
+
+      if (!canSwitch) {
+        const found = devices.find(d => d.key === activeKey);
+        const span = document.createElement('span');
+        span.className = 'device-text';
+        span.textContent = found ? found.name : activeKey;
+        bar.appendChild(span);
+        return;
+      }
+
+      // Use short alias on narrow screens
+      const isPhone = window.innerWidth < 480;
+      const shortMap = { k: 'K', o: 'O', b: 'B', zbk: 'ZBK', tv: 'TV', otv: 'OTV' };
+
+      devices.forEach(d => {
+        const btn = document.createElement('button');
+        btn.className = 'device-btn' + (d.key === activeKey ? ' active' : '');
+        btn.textContent = isPhone && shortMap[d.key] ? shortMap[d.key] : d.name;
+        btn.dataset.key = d.key;
+        btn.addEventListener('click', () => {
+          if (d.key === activeDevice) return;
+          withLoading(btn, async () => {
+            await postCommand({ command: 'device', value: d.key });
+            activeDevice = d.key;
+            document.querySelectorAll('.device-btn').forEach(b => b.classList.toggle('active', b.dataset.key === d.key));
+          });
+        });
+        bar.appendChild(btn);
+      });
+    }
+
+    // ── presets ──────────────────────────────────────────────────────
+
+    function renderPresets(buttons) {
+      const grid = document.getElementById('preset-grid');
+      const section = document.getElementById('presets-section');
+      if (!buttons || buttons.length === 0) return;
+      section.hidden = false;
+      buttons.forEach(b => {
+        const btn = document.createElement('button');
+        btn.className = 'btn preset-btn';
+        btn.textContent = b.label;
+        btn.addEventListener('click', () => {
+          withLoading(btn, () => postCommand({ command: b.command, device: b.device, value: b.value }));
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    // ── search ───────────────────────────────────────────────────────
+
+    function setupSearch() {
+      const searchBtn = document.getElementById('search-btn');
+      const searchInput = document.getElementById('search-input');
+      searchBtn.addEventListener('click', () => {
+        const val = searchInput.value.trim();
+        if (!val) return;
+        withLoading(searchBtn, async () => {
+          await postCommand({ command: 'cast', value: val });
+          searchInput.value = '';
+        });
+      });
+      searchInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') searchBtn.click();
+      });
+    }
+
+    // ── playback buttons ─────────────────────────────────────────────
+
+    function setupPlayback() {
+      document.querySelectorAll('[data-cmd]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const command = btn.dataset.cmd;
+          const value = btn.dataset.value;
+          withLoading(btn, () => postCommand(value ? { command, value } : { command }));
+        });
+      });
+    }
+
+    // ── init ─────────────────────────────────────────────────────────
+
+    async function init() {
+      try {
+        const [stateRes, configRes, devicesRes] = await Promise.all([
+          fetch('/api/state'),
+          fetch('/api/config'),
+          fetch('/api/devices'),
+        ]);
+
+        if (stateRes.status === 401 || configRes.status === 401 || devicesRes.status === 401) {
+          window.location.href = '/';
+          return;
+        }
+
+        const state = await stateRes.json();
+        const config = await configRes.json();
+        const devices = await devicesRes.json();
+
+        activeDevice = state.device;
+        allowDeviceSwitch = config.allowDeviceSwitch;
+
+        if (state.prev) {
+          document.getElementById('now-playing-val').textContent = state.prev;
+          document.getElementById('now-playing-section').hidden = false;
+        }
+
+        renderDeviceBar(devices, activeDevice, allowDeviceSwitch);
+        renderPresets(config.buttons);
+
+        if (config.allowSearch) {
+          document.getElementById('search-section').hidden = false;
+          setupSearch();
+        }
+
+        setupPlayback();
+      } catch {
+        // network error — stay on page, user can retry
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

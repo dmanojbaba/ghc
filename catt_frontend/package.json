@@ -1,0 +1,20 @@
+{
+  "name": "catt-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "npx tsc --noEmit",
+    "deploy": "wrangler pages deploy public --project-name catt-frontend",
+    "deploy:dry": "wrangler pages deploy public --project-name catt-frontend --dry-run",
+    "dev": "wrangler pages dev public"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240909.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "wrangler": "^3.72.0"
+  }
+}

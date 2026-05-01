@@ -1,0 +1,49 @@
+name: catt-frontend
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: [ catt_frontend/** ]
+  push:
+    branches: [ main ]
+    paths: [ catt_frontend/** ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: catt_frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: catt_frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: catt_frontend
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        working-directory: catt_frontend
+        run: npm test
+
+      - name: Dry run deploy
+        if: github.event_name == 'pull_request'
+        working-directory: catt_frontend
+        run: npx wrangler pages deploy public --project-name catt-frontend --dry-run
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WRANGLER_SEND_METRICS: false
+
+      - name: Deploy
+        if: github.event_name != 'pull_request'
+        working-directory: catt_frontend
+        run: npx wrangler pages deploy public --project-name catt-frontend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WRANGLER_SEND_METRICS: false

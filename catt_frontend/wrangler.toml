@@ -1,0 +1,5 @@
+name = "catt-frontend"
+pages_build_output_dir = "public"
+compatibility_date = "2024-09-23"
+
+# Production domain: gha.manojbaba.com
