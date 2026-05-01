@@ -27,6 +27,7 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
     TELEGRAM_BOT_TOKEN: "test-bot-token",
     TELEGRAM_SECRET_TOKEN: "",
     YOUTUBE_API_KEY: "",
+    REDIRECT_URL: process.env.REDIRECT_URL!,
     DEVICE_QUEUE: {} as DurableObjectNamespace,
     ...overrides,
   };
@@ -43,7 +44,7 @@ function makeDoStub(): DurableObjectStub {
 async function makeSlackRequest(text: string, env: Env): Promise<Request> {
   const body = new URLSearchParams({ text }).toString();
   const sig = await makeSlackSignature(env.SLACK_SIGNING_SECRET, TIMESTAMP, body);
-  return new Request("https://ghc.manojbaba.com/slack", {
+  return new Request("https://bff.example.com/slack", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -62,7 +63,7 @@ beforeEach(() => {
 describe("handleSlack — signature verification", () => {
   it("returns 401 for invalid signature", async () => {
     const body = new URLSearchParams({ text: "play" }).toString();
-    const request = new Request("https://ghc.manojbaba.com/slack", {
+    const request = new Request("https://bff.example.com/slack", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -77,7 +78,7 @@ describe("handleSlack — signature verification", () => {
 
   it("returns 401 for missing signature", async () => {
     const body = new URLSearchParams({ text: "play" }).toString();
-    const request = new Request("https://ghc.manojbaba.com/slack", {
+    const request = new Request("https://bff.example.com/slack", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
@@ -88,7 +89,7 @@ describe("handleSlack — signature verification", () => {
 
   it("passes through when SLACK_SIGNING_SECRET is not set", async () => {
     const body = new URLSearchParams({ text: "play" }).toString();
-    const request = new Request("https://ghc.manojbaba.com/slack", {
+    const request = new Request("https://bff.example.com/slack", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
@@ -184,7 +185,7 @@ describe("handleSlack — device token parsing", () => {
 });
 
 function makeTelegramRequest(text: string, chatId: number): Request {
-  return new Request("https://ghc.manojbaba.com/telegram", {
+  return new Request("https://bff.example.com/telegram", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ message: { text, chat: { id: chatId } } }),

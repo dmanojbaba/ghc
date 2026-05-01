@@ -1,9 +1,8 @@
 import { DEFAULT_PREV } from "./devices";
 
-const BASE_YOUTUBE  = "https://www.youtube.com/watch?v=";
-const BASE_REDIRECT = "https://r.manojbaba.com/r/";
+const BASE_YOUTUBE = "https://www.youtube.com/watch?v=";
 
-export function getParsedUrl(url: string, ytVideoId = false, ytPlaylist = false): string {
+export function getParsedUrl(url: string, redirectUrl: string, ytVideoId = false, ytPlaylist = false): string {
   if (ytVideoId) {
     return BASE_YOUTUBE + url;
   }
@@ -13,10 +12,11 @@ export function getParsedUrl(url: string, ytVideoId = false, ytPlaylist = false)
     parsed = new URL(url);
   } catch {
     // not a valid URL — treat as KV key or search query
-    return BASE_REDIRECT + encodeURIComponent(url);
+    return redirectUrl + "/r/" + encodeURIComponent(url);
   }
 
-  if (parsed.hostname === "r.manojbaba.com") {
+  const redirectHost = new URL(redirectUrl).hostname;
+  if (parsed.hostname === redirectHost) {
     return url;
   }
 
@@ -48,12 +48,13 @@ export function getParsedUrl(url: string, ytVideoId = false, ytPlaylist = false)
     return url;
   }
 
-  return BASE_REDIRECT + encodeURIComponent(url);
+  return redirectUrl + "/r/" + encodeURIComponent(url);
 }
 
 export async function getPlaylistItems(
   apiKey: string,
   playlistId: string,
+  redirectUrl: string,
   maxResults = 10,
 ): Promise<{ first: string; rest: string[] }> {
   const url =
@@ -64,9 +65,9 @@ export async function getPlaylistItems(
   const data = await res.json() as { items?: Array<{ snippet: { resourceId: { videoId: string } } }> };
 
   if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
-    return { first: getParsedUrl(DEFAULT_PREV), rest: [] };
+    return { first: getParsedUrl(DEFAULT_PREV, redirectUrl), rest: [] };
   }
 
-  const urls = data.items.map((item) => getParsedUrl(item.snippet.resourceId.videoId, true));
+  const urls = data.items.map((item) => getParsedUrl(item.snippet.resourceId.videoId, redirectUrl, true));
   return { first: urls[0], rest: urls.slice(1) };
 }
