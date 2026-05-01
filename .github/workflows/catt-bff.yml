@@ -27,6 +27,8 @@ jobs:
       - name: Run tests
         working-directory: catt_bff
         run: npm test
+        env:
+          REDIRECT_URL: ${{ secrets.REDIRECT_URL }}
 
       - name: Dry run deploy
         if: github.event_name == 'pull_request'

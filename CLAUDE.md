@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Controls Chromecast devices over HTTP. Three components — each has its own `CLAUDE.md`:
 
-- **`catt_bff/`** — Cloudflare Worker (TypeScript). Google Home C2C, per-device play queues via Durable Objects, Slack/Telegram webhooks, `POST /catt` endpoint. Deployed at `ghc.manojbaba.com`.
+- **`catt_bff/`** — Cloudflare Worker (TypeScript). Google Home C2C, per-device play queues via Durable Objects, Slack/Telegram webhooks, `POST /catt` endpoint. Deployed at `bff.example.com`.
 - **`catt_backend/`** — Flask REST API (Python). Wraps the `catt` CLI. Runs on a Raspberry Pi inside Docker on the LAN, exposed via Cloudflare Tunnel.
-- **`redirect/`** — Cloudflare Worker (JavaScript). URL shortener/redirect service. Deployed at `r.manojbaba.com`.
+- **`redirect/`** — Cloudflare Worker (JavaScript). URL shortener/redirect service. Deployed at `redirect.example.com`.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ Controls Chromecast devices over HTTP. Three components — each has its own `CL
 Google Assistant / Slack / Telegram
          │
          ▼
-  catt_bff  (Cloudflare Worker — ghc.manojbaba.com)
+  catt_bff  (Cloudflare Worker — bff.example.com)
          │  Cloudflare Tunnel
          ▼
   catt_backend  (LAN, Docker, port 5000)

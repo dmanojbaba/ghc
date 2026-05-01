@@ -8,4 +8,5 @@ interface Env {
   TELEGRAM_ALLOWED_CHAT_IDS: string;
   TELEGRAM_SECRET_TOKEN: string;
   YOUTUBE_API_KEY: string;
+  REDIRECT_URL: string;
 }

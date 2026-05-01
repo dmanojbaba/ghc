@@ -159,7 +159,7 @@ async function handleExecute(
           );
           await doGet(stub, "/clear");
           await doGet(stub, "/set/channel/" + channelCode);
-          await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode)));
+          await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode, env.REDIRECT_URL)));
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.relativeChannel") {
@@ -168,7 +168,7 @@ async function handleExecute(
           const channelCode = getAdjacentChannel(DEVICE_ID, currentChannel, delta);
           await doGet(stub, "/clear");
           await doGet(stub, "/set/channel/" + channelCode);
-          await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode)));
+          await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode, env.REDIRECT_URL)));
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaShuffle") {
@@ -211,7 +211,7 @@ async function handleExecute(
           const query = String(params.newApplicationName ?? params.newApplication ?? "");
           if (query) {
             await doGet(stub, "/clear");
-            await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(query)));
+            await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(query, env.REDIRECT_URL)));
           }
 
           result = { status: "SUCCESS", states: { online: true } };

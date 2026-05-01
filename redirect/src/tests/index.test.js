@@ -20,7 +20,7 @@ function makeEnv(kvEntries = {}) {
 }
 
 function makeRequest(path, method = "GET", body = null, headers = {}) {
-  const url = "https://r.manojbaba.com" + path;
+  const url = "https://redirect.example.com" + path;
   const init = { method, headers: { "Content-Type": "application/json", ...headers } };
   if (body) init.body = JSON.stringify(body);
   return new Request(url, init);
@@ -50,7 +50,7 @@ beforeEach(() => {
 
 describe("GET /ip", () => {
   it("returns CF-Connecting-IP header value", async () => {
-    const req = new Request("https://r.manojbaba.com/ip", {
+    const req = new Request("https://redirect.example.com/ip", {
       headers: { "CF-Connecting-IP": "1.2.3.4" },
     });
     const res = await worker.fetch(req, makeEnv());
@@ -226,7 +226,7 @@ describe("unknown routes", () => {
 
 describe("POST /_raw", () => {
   it("echoes the request body", async () => {
-    const req = new Request("https://r.manojbaba.com/_raw", {
+    const req = new Request("https://redirect.example.com/_raw", {
       method: "POST",
       body: "hello",
     });
