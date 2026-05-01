@@ -337,26 +337,42 @@ describe("handleSlack — channel command", () => {
 });
 
 describe("handleSlack — clear and reset commands", () => {
-  it("routes clear to DO", async () => {
+  it("routes clear to DO and returns state synchronously", async () => {
     const env = makeEnv();
-    const stub = makeDoStub();
+    const state = { session: "idle", device: "o" };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
     const ctx = makeCtx();
     const request = await makeSlackRequest("clear", env);
-    await handleSlack(request, env, ctx, stub);
-    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect((call[0] as Request).url).toContain("/clear");
+    const res = await handleSlack(request, env, ctx, stub);
+    expect(ctx.waitUntil).not.toHaveBeenCalled();
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/clear");
+    const text = await res.text();
+    expect(text).toContain('"session"');
   });
 
-  it("routes reset to DO", async () => {
+  it("routes reset to DO and returns state synchronously", async () => {
     const env = makeEnv();
-    const stub = makeDoStub();
+    const state = { session: "idle", device: "o" };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
     const ctx = makeCtx();
     const request = await makeSlackRequest("reset", env);
-    await handleSlack(request, env, ctx, stub);
-    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect((call[0] as Request).url).toContain("/reset");
+    const res = await handleSlack(request, env, ctx, stub);
+    expect(ctx.waitUntil).not.toHaveBeenCalled();
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/reset");
+    const text = await res.text();
+    expect(text).toContain('"session"');
   });
 });
 

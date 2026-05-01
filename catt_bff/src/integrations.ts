@@ -135,9 +135,8 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
 
   const { device, rawValue } = parseTokens(rest);
 
-  if (command === "device") {
-    const key = rawValue.trim() || device;
-    await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(key)}`));
+  if (command === "device" || command === "clear" || command === "reset") {
+    await dispatchCommand(command, device, rawValue, env, doStub);
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
     const json = await res.json();
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
