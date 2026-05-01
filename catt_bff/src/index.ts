@@ -3,7 +3,7 @@ import { handleFulfillment, handleSync, handleQuery } from "./googleHome";
 import { handleOAuthAuth, handleOAuthToken } from "./oauth";
 import { handleSlack, handleTelegram } from "./integrations";
 import { handleCatt } from "./cattHandler";
-import { DEVICE_ID, DEFAULT_APP, DEFAULT_DEVICE } from "./devices";
+import { DEVICE_ID, DEFAULT_APP, DEFAULT_DEVICE, getDeviceList, getChannelList } from "./devices";
 
 export { DeviceQueue };
 
@@ -57,6 +57,16 @@ export default {
     }
     if (path === "/oauth/token" && method === "POST") {
       return handleOAuthToken();
+    }
+
+    // Device list
+    if (path === "/devices" && method === "GET") {
+      return Response.json(getDeviceList(DEVICE_ID));
+    }
+
+    // Channel list
+    if (path === "/channels" && method === "GET") {
+      return Response.json(getChannelList(DEVICE_ID));
     }
 
     // Ad-hoc POST endpoint

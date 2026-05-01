@@ -120,6 +120,51 @@ curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "channel", "value": "sun"}'
 ```
 
+## GET /devices
+
+Returns the list of available input devices. Requires `X-API-Key` header.
+
+```bash
+curl https://ghc.manojbaba.com/devices -H 'X-API-Key: <key>'
+```
+
+Response:
+```json
+[
+  { "key": "k",   "name": "Mini Kitchen" },
+  { "key": "o",   "name": "Mini Office" },
+  { "key": "b",   "name": "Mini Bedroom" },
+  { "key": "zbk", "name": "Mini ZBK" },
+  { "key": "tv",  "name": "Google TV" },
+  { "key": "otv", "name": "Office TV" }
+]
+```
+
+## GET /channels
+
+Returns the list of available channels sorted by number. Requires `X-API-Key` header.
+
+```bash
+curl https://ghc.manojbaba.com/channels -H 'X-API-Key: <key>'
+```
+
+Response:
+```json
+[
+  { "key": "ping",    "name": "ping",         "number": "1" },
+  { "key": "sun",     "name": "Sun News",      "number": "2" },
+  { "key": "pttv",    "name": "Tamil News",    "number": "3" },
+  { "key": "london",  "name": "Radio London",  "number": "4" },
+  { "key": "dubai",   "name": "Radio Dubai",   "number": "5" },
+  { "key": "raja",    "name": "Radio Raja",    "number": "6" },
+  { "key": "lime",    "name": "Radio Lime",    "number": "7" },
+  { "key": "chennai", "name": "Radio Chennai", "number": "8" },
+  { "key": "arr",     "name": "Radio ARR",     "number": "9" }
+]
+```
+
+---
+
 ## GET /device/box/* endpoints
 
 All require `X-API-Key` header.

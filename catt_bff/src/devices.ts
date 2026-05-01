@@ -285,6 +285,34 @@ export function getChannelKey(
   return null;
 }
 
+export function getDeviceList(deviceId: string): Array<{ key: string; name: string }> {
+  for (const d of DEVICES) {
+    if (d.id !== deviceId) continue;
+    const inputs = d.attributes.availableInputs as Array<{
+      key: string;
+      names: Array<{ name_synonym: string[] }>;
+    }>;
+    return inputs.map((i) => ({ key: i.key, name: i.names[0].name_synonym[0] }));
+  }
+  return [];
+}
+
+export function getChannelList(deviceId: string): Array<{ key: string; name: string; number: string }> {
+  for (const d of DEVICES) {
+    if (d.id !== deviceId) continue;
+    const channels = d.attributes.availableChannels as Array<{
+      key: string;
+      names: string[];
+      number: string;
+    }>;
+    return channels
+      .slice()
+      .sort((a, b) => Number(a.number) - Number(b.number))
+      .map((c) => ({ key: c.key, name: c.names[0], number: c.number }));
+  }
+  return [];
+}
+
 export function getChannelCode(
   deviceId: string,
   channelNumber: string,
