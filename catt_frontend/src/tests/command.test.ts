@@ -37,7 +37,7 @@ function makeCtx(request: Request, env: Env) {
 function postRequest(cookieVal?: string, body?: unknown) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (cookieVal) headers["Cookie"] = `${COOKIE_NAME}=${cookieVal}`;
-  return new Request("https://gha.manojbaba.com/api/command", {
+  return new Request("https://frontend.example.com/api/command", {
     method: "POST",
     headers,
     body: JSON.stringify(body ?? { command: "stop" }),
@@ -47,7 +47,7 @@ function postRequest(cookieVal?: string, body?: unknown) {
 function getRequest(cookieVal?: string, path = "/api/devices") {
   const headers: Record<string, string> = {};
   if (cookieVal) headers["Cookie"] = `${COOKIE_NAME}=${cookieVal}`;
-  return new Request(`https://gha.manojbaba.com${path}`, { method: "GET", headers });
+  return new Request(`https://frontend.example.com${path}`, { method: "GET", headers });
 }
 
 // ── kids command proxy ─────────────────────────────────────────────────────

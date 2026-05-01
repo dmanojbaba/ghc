@@ -1,6 +1,6 @@
 # catt_frontend
 
-Cloudflare Pages web UI for controlling Chromecast devices via `catt_bff`. Deployed at `gha.manojbaba.com`.
+Cloudflare Pages web UI for controlling Chromecast devices via `catt_bff`. Deployed at `frontend.example.com`.
 
 Two views:
 - **Kids view** (`/`) — PIN login, preset favourite buttons, playback controls
@@ -25,7 +25,7 @@ Create a `.dev.vars` file in `catt_frontend/` with the following:
 UI_PIN=123456
 UI_ADMIN_PASSWORD=your-admin-password
 UI_COOKIE_SECRET=any-random-string-at-least-32-chars
-CATT_BFF_URL=https://ghc.manojbaba.com
+CATT_BFF_URL=https://bff.example.com
 CATT_API_KEY=your-catt-api-key
 UI_KIDS_ALLOW_SEARCH=true
 UI_KIDS_ALLOW_DEVICE_SWITCH=true
@@ -62,7 +62,7 @@ Add the following as **Secrets** (encrypted):
 | `UI_PIN` | 6-digit numeric PIN for kids login (e.g. `123456`) |
 | `UI_ADMIN_PASSWORD` | Admin login password |
 | `UI_COOKIE_SECRET` | Random string, at least 32 characters — used to sign session cookies. Generate with: `openssl rand -hex 32` |
-| `CATT_BFF_URL` | `https://ghc.manojbaba.com` |
+| `CATT_BFF_URL` | `https://bff.example.com` |
 | `CATT_API_KEY` | The `CATT_API_KEY` secret from `catt_bff` |
 | `BUTTONS_CONFIG` | JSON array of kids favourite buttons (see format below) |
 
@@ -78,7 +78,7 @@ Add the following as **Variables** (plain text):
 
 ### 3. Set custom domain
 
-In the Cloudflare dashboard go to **Workers & Pages** → `catt-frontend` → **Custom domains** → **Set up a custom domain** → enter `gha.manojbaba.com`.
+In the Cloudflare dashboard go to **Workers & Pages** → `catt-frontend` → **Custom domains** → **Set up a custom domain** → enter `frontend.example.com`.
 
 ### 4. Deploy
 

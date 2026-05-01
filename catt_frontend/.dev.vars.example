@@ -1,7 +1,7 @@
 UI_PIN=123456
 UI_ADMIN_PASSWORD=your-admin-password
 UI_COOKIE_SECRET=replace-with-32-char-random-string
-CATT_BFF_URL=https://ghc.manojbaba.com
+CATT_BFF_URL=https://bff.example.com
 CATT_API_KEY=your-catt-api-key
 UI_KIDS_ALLOW_SEARCH=true
 UI_KIDS_ALLOW_DEVICE_SWITCH=true

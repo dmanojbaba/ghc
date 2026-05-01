@@ -253,7 +253,7 @@ All buttons on kids and admin views are disabled for 500ms after a tap, and re-e
 | `UI_PIN` | 6-digit numeric PIN for kids login |
 | `UI_ADMIN_PASSWORD` | Admin login password |
 | `UI_COOKIE_SECRET` | HMAC signing key for session cookies (shared between kids and admin) |
-| `CATT_BFF_URL` | Base URL of `catt_bff` (e.g. `https://ghc.manojbaba.com`) |
+| `CATT_BFF_URL` | Base URL of `catt_bff` (e.g. `https://bff.example.com`) |
 | `CATT_API_KEY` | Forwarded as `X-API-Key` on all proxied requests to `catt_bff` |
 | `BUTTONS_CONFIG` | JSON array of kids preset buttons |
 
@@ -271,7 +271,7 @@ All buttons on kids and admin views are disabled for 500ms after a tap, and re-e
 
 | Trigger | Steps |
 |---|---|
-| PR touching `catt_frontend/**` | `npm install` → `npx tsc --noEmit` → `npm test` → `wrangler pages deploy --dry-run` |
+| PR touching `catt_frontend/**` | `npm install` → `npx tsc --noEmit` → `npm test` |
 | Merge to `main` | `npm install` → `npx tsc --noEmit` → `npm test` → `wrangler pages deploy` |
 
 Required GitHub secrets: `CLOUDFLARE_API_TOKEN`

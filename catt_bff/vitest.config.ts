@@ -15,8 +15,14 @@ function loadEnvFile(path: string): Record<string, string> {
   }
 }
 
+const fileEnv = loadEnvFile(resolve(__dirname, ".env.test"));
+
+// CI env vars take precedence over .env.test file values
+const env: Record<string, string> = { ...fileEnv };
+for (const k of Object.keys(env)) {
+  if (process.env[k]) env[k] = process.env[k]!;
+}
+
 export default defineConfig({
-  test: {
-    env: loadEnvFile(resolve(__dirname, ".env.test")),
-  },
+  test: { env },
 });
