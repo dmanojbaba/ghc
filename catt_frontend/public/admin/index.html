@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>catt admin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <h1>catt admin</h1>
+      <form id="login-form" novalidate>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password"
+               autocomplete="current-password" placeholder="••••••••" required autofocus>
+      </form>
+      <p class="error-msg" id="error" aria-live="polite"></p>
+      <button class="btn btn-full" id="submit-btn" type="submit" form="login-form">Sign in</button>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('login-form');
+    const passwordInput = document.getElementById('password');
+    const errorEl = document.getElementById('error');
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      const password = passwordInput.value;
+      if (!password) {
+        errorEl.textContent = 'Enter your password.';
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.classList.add('loading');
+      try {
+        const res = await fetch('/api/admin/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+          redirect: 'manual',
+        });
+        if (res.status === 302 || res.status === 0) {
+          window.location.href = '/admin/app';
+        } else if (res.status === 401) {
+          errorEl.textContent = 'Incorrect password.';
+          passwordInput.value = '';
+          passwordInput.focus();
+        } else {
+          errorEl.textContent = 'Something went wrong. Try again.';
+        }
+      } catch {
+        errorEl.textContent = 'Network error. Try again.';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('loading');
+      }
+    });
+  </script>
+</body>
+</html>

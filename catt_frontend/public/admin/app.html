@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>catt admin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-wrap">
+
+    <!-- State bar -->
+    <div class="section">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+        <div>
+          <div class="state-bar" id="state-bar">
+            <span>session: <span class="state-val" id="s-session">—</span></span>
+            <span>app: <span class="state-val" id="s-app">—</span></span>
+            <span>alarm: <span class="state-val" id="s-alarm">—</span></span>
+          </div>
+        </div>
+        <button class="btn" id="logout-btn" style="min-height:36px; padding:6px 14px; font-size:0.85rem;">Log out</button>
+      </div>
+    </div>
+
+    <!-- Device + Channel -->
+    <div class="section">
+      <span class="section-label">Device</span>
+      <div class="device-bar" id="device-bar"></div>
+    </div>
+
+    <!-- Cast + TTS -->
+    <div class="section">
+      <span class="section-label">Cast</span>
+      <div class="input-row">
+        <input id="cast-input" type="text" placeholder="URL or search query">
+        <button class="btn" id="cast-btn">Cast</button>
+      </div>
+      <span class="section-label">TTS</span>
+      <div class="input-row">
+        <input id="tts-input" type="text" placeholder="Text to speak">
+        <button class="btn" id="tts-btn">Speak</button>
+      </div>
+    </div>
+
+    <!-- Playback -->
+    <div class="section">
+      <span class="section-label">Playback</span>
+      <div style="display:flex; justify-content:space-between; gap:16px; font-size:0.85rem; color:var(--text2);">
+        <span>prev: <span class="state-val" id="s-prev" style="word-break:break-all;">—</span></span>
+        <span>next: <span class="state-val" id="s-next" style="word-break:break-all;">—</span></span>
+      </div>
+      <div class="playback-row">
+        <button class="btn" data-cmd="prev">Prev</button>
+        <button class="btn" data-cmd="play">Play / Pause</button>
+        <button class="btn" data-cmd="stop">Stop</button>
+        <button class="btn" data-cmd="next">Next</button>
+      </div>
+      <div class="playback-row">
+        <button class="btn" data-cmd="rewind" data-value="30">Rewind 30s</button>
+        <button class="btn" data-cmd="ffwd" data-value="30">FFwd 30s</button>
+        <button class="btn" data-cmd="clear">Clear</button>
+        <button class="btn" data-cmd="reset">Reset</button>
+      </div>
+      <div class="playback-row" style="flex-wrap:nowrap; align-items:center;">
+        <button class="btn" data-cmd="channel" data-value="down">Ch ‹</button>
+        <span class="state-val" id="s-channel" style="flex:1; text-align:center; font-size:0.95rem;">—</span>
+        <button class="btn" data-cmd="channel" data-value="up">Ch ›</button>
+      </div>
+    </div>
+
+    <!-- Volume -->
+    <div class="section">
+      <span class="section-label">Volume</span>
+      <div class="playback-row">
+        <input id="vol-input" type="number" min="0" max="100" placeholder="0–100"
+               style="flex:1; min-width:0; padding:10px 8px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg); color:var(--text); font-size:0.95rem; text-align:center;">
+        <button class="btn" id="vol-set-btn">Set</button>
+        <button class="btn" data-cmd="volume" data-value="down">Vol –</button>
+        <button class="btn" data-cmd="volume" data-value="up">Vol +</button>
+      </div>
+    </div>
+
+    <!-- Sleep timer -->
+    <div class="section">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="section-label">Sleep timer</span>
+        <span style="font-size:0.8rem; color:var(--text2);">sleep_at: <span class="state-val" id="s-sleep">—</span></span>
+      </div>
+      <div class="playback-row">
+        <input id="sleep-input" type="number" min="1" max="600" placeholder="mins"
+               style="flex:1; min-width:0; padding:10px 8px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg); color:var(--text); font-size:0.95rem; text-align:center;">
+        <button class="btn" id="sleep-set-btn">Set</button>
+        <button class="btn" id="sleep-cancel-btn">Cancel</button>
+      </div>
+    </div>
+
+    <!-- History + Queue -->
+    <div class="two-col">
+      <div class="section">
+        <span class="section-label">History</span>
+        <ul class="history-list" id="history-list">
+          <li class="empty-msg">No history</li>
+        </ul>
+      </div>
+      <div class="section">
+        <span class="section-label">Queue</span>
+        <ul class="queue-list" id="queue-list">
+          <li class="empty-msg">Empty</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let pollTimer = null;
+
+    // ── helpers ──────────────────────────────────────────────────────
+
+    async function postCommand(body) {
+      const res = await fetch('/api/admin/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 401) window.location.href = '/admin';
+      return res;
+    }
+
+    function withLoading(btn, fn) {
+      btn.disabled = true;
+      btn.classList.add('loading');
+      const done = () => {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+      };
+      const timer = setTimeout(done, 500);
+      fn().then(() => { clearTimeout(timer); done(); refreshState(); })
+          .catch(() => { clearTimeout(timer); done(); });
+    }
+
+    // ── state rendering ───────────────────────────────────────────────
+
+    function formatTime(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+    }
+
+    function renderState(data) {
+      document.getElementById('s-session').textContent = data.session ?? '—';
+      document.getElementById('s-app').textContent = data.app ?? '—';
+      document.getElementById('s-alarm').textContent = formatTime(data.alarm);
+      document.getElementById('s-channel').textContent = data.channel ?? '—';
+      document.getElementById('s-sleep').textContent = formatTime(data.sleep_at);
+      document.getElementById('s-prev').textContent = data.prev ?? '—';
+      document.getElementById('s-next').textContent = data.next ?? '—';
+
+      // device bar
+      const bar = document.getElementById('device-bar');
+      const activeKey = data.device;
+      bar.querySelectorAll('.device-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.key === activeKey);
+      });
+
+      // queue
+      const queueList = document.getElementById('queue-list');
+      const queue = data.queue ?? [];
+      if (queue.length === 0) {
+        queueList.innerHTML = '<li class="empty-msg">Empty</li>';
+      } else {
+        queueList.innerHTML = queue.map(item =>
+          `<li data-pos="${item.position}"><a href="${item.url}" target="_blank" rel="noopener">${item.url}</a></li>`
+        ).join('');
+      }
+
+      // history
+      const historyList = document.getElementById('history-list');
+      const history = data.history ?? [];
+      if (history.length === 0) {
+        historyList.innerHTML = '<li class="empty-msg">No history</li>';
+      } else {
+        historyList.innerHTML = history.map(item =>
+          `<li><a href="${item.url}" target="_blank" rel="noopener">${item.url}</a></li>`
+        ).join('');
+      }
+    }
+
+    async function fetchState() {
+      try {
+        const res = await fetch('/api/admin/state');
+        if (res.status === 401) { window.location.href = '/admin'; return; }
+        if (res.ok) renderState(await res.json());
+      } catch { /* network error — keep polling */ }
+    }
+
+    function refreshState() {
+      fetchState();
+    }
+
+    // ── polling (Page Visibility API) ────────────────────────────────
+
+    function startPolling() {
+      stopPolling();
+      pollTimer = setInterval(fetchState, 30_000);
+    }
+
+    function stopPolling() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchState();
+        startPolling();
+      }
+    });
+
+    // ── device buttons ────────────────────────────────────────────────
+
+    async function loadDevices() {
+      try {
+        const res = await fetch('/api/devices');
+        if (!res.ok) return;
+        const devices = await res.json();
+        const bar = document.getElementById('device-bar');
+        bar.innerHTML = '';
+        devices.forEach(d => {
+          const btn = document.createElement('button');
+          btn.className = 'device-btn';
+          btn.textContent = d.name;
+          btn.dataset.key = d.key;
+          btn.dataset.cmd = 'device';
+          btn.addEventListener('click', () => {
+            withLoading(btn, () => postCommand({ command: 'device', value: d.key }));
+          });
+          bar.appendChild(btn);
+        });
+      } catch { /* ignore */ }
+    }
+
+    // ── wire up all buttons ───────────────────────────────────────────
+
+    function setup() {
+      // generic data-cmd buttons
+      document.querySelectorAll('[data-cmd]').forEach(btn => {
+        if (btn.classList.contains('device-btn')) return;
+        btn.addEventListener('click', () => {
+          const command = btn.dataset.cmd;
+          const value = btn.dataset.value;
+          withLoading(btn, () => postCommand(value ? { command, value } : { command }));
+        });
+      });
+
+      // cast
+      document.getElementById('cast-btn').addEventListener('click', () => {
+        const val = document.getElementById('cast-input').value.trim();
+        if (!val) return;
+        withLoading(document.getElementById('cast-btn'), async () => {
+          await postCommand({ command: 'cast', value: val });
+          document.getElementById('cast-input').value = '';
+        });
+      });
+
+      // tts
+      document.getElementById('tts-btn').addEventListener('click', () => {
+        const val = document.getElementById('tts-input').value.trim();
+        if (!val) return;
+        withLoading(document.getElementById('tts-btn'), async () => {
+          await postCommand({ command: 'tts', value: val });
+          document.getElementById('tts-input').value = '';
+        });
+      });
+
+      // volume set
+      document.getElementById('vol-set-btn').addEventListener('click', () => {
+        const val = document.getElementById('vol-input').value.trim();
+        if (!val) return;
+        withLoading(document.getElementById('vol-set-btn'), () => postCommand({ command: 'volume', value: val }));
+      });
+
+      // sleep set / cancel
+      document.getElementById('sleep-set-btn').addEventListener('click', () => {
+        const val = document.getElementById('sleep-input').value.trim();
+        if (!val) return;
+        withLoading(document.getElementById('sleep-set-btn'), () => postCommand({ command: 'sleep', value: val }));
+      });
+      document.getElementById('sleep-cancel-btn').addEventListener('click', () => {
+        withLoading(document.getElementById('sleep-cancel-btn'), () => postCommand({ command: 'sleep', value: 'cancel' }));
+      });
+
+      // logout
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        await fetch('/api/admin/logout', { method: 'POST' });
+        window.location.href = '/admin';
+      });
+
+      // enter key on inputs
+      document.getElementById('cast-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('cast-btn').click(); });
+      document.getElementById('tts-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('tts-btn').click(); });
+    }
+
+    // ── init ──────────────────────────────────────────────────────────
+
+    async function init() {
+      await Promise.all([loadDevices(), fetchState()]);
+      setup();
+      startPolling();
+    }
+
+    init();
+  </script>
+</body>
+</html>
