@@ -14,6 +14,10 @@ export async function handleCatt(request: Request, _env: Env, doStub: DurableObj
     return doStub.fetch(new Request(`https://do/device/box/${body.command}/${arg}`));
   }
 
+  if (body.command === "device") {
+    const key = encodeURIComponent(body.value ?? "");
+    return doStub.fetch(new Request(`https://do/device/box/set/device/${key}`));
+  }
   if (body.command === "channel") {
     const arg = encodeURIComponent(body.value ?? "");
     return doStub.fetch(new Request(`https://do/device/box/channel/${arg}`));

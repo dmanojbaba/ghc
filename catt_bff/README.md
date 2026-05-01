@@ -40,6 +40,7 @@ Commands and device names are case-insensitive. Telegram commands may be prefixe
 | `ffwd` | `ffwd 30` | active | Fast-forward N seconds (default 30). |
 | `sleep` | `sleep 30` | active | Stop playback after N minutes. |
 | `sleep` | `sleep cancel` | active | Cancel a pending sleep timer. |
+| `device` | `device otv` | — | Set active device (key or name). |
 | `channel` | `channel up` | active | Switch to next channel. |
 | `channel` | `channel down` | active | Switch to previous channel. |
 | `channel` | `channel sun` | active | Switch to named channel (key or name). |
@@ -104,6 +105,10 @@ curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "mute", "value": "false"}'
 curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
   -H 'Content-Type: application/json' -d '{"command": "unmute"}'
+
+# Device
+curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \
+  -H 'Content-Type: application/json' -d '{"command": "device", "value": "otv"}'
 
 # Channel
 curl -X POST https://ghc.manojbaba.com/catt -H 'X-API-Key: <key>' \

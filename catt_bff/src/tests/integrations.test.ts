@@ -264,6 +264,43 @@ describe("handleSlack — command parsing", () => {
   });
 });
 
+describe("handleSlack — device command", () => {
+  it("routes device to DO set/device and returns state", async () => {
+    const env = makeEnv();
+    const state = { session: "idle", device: "otv" };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("device otv", env);
+    const res = await handleSlack(request, env, ctx, stub);
+    expect(ctx.waitUntil).not.toHaveBeenCalled();
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/set/device/otv");
+    const text = await res.text();
+    expect(text).toContain('"device"');
+    expect(text).toContain('"otv"');
+  });
+
+  it("uses device token as key when no explicit value given", async () => {
+    const env = makeEnv();
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response("{}");
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("device k", env);
+    await handleSlack(request, env, ctx, stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/set/device/k");
+  });
+});
+
 describe("handleSlack — channel command", () => {
   it("routes channel up to DO", async () => {
     const env = makeEnv();
@@ -320,6 +357,24 @@ describe("handleSlack — clear and reset commands", () => {
     await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
     const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect((call[0] as Request).url).toContain("/reset");
+  });
+});
+
+describe("handleTelegram — device sends state reply", () => {
+  it("sends state after device command", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const state = { session: "idle", device: "otv" };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const env = makeEnv();
+    await handleTelegram(makeTelegramRequest("device otv", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toContain('"device"');
   });
 });
 

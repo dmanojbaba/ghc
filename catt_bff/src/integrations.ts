@@ -21,6 +21,7 @@ sleep <minutes>      – sleep timer
 sleep cancel         – cancel sleep timer
 channel up/down      – next/previous channel
 channel <name>       – switch to named channel
+device <key>         – set active device
 state                – show device state
 help                 – show this message`;
 
@@ -68,6 +69,11 @@ async function dispatchCommand(
       await castCommand(env.CATT_BACKEND_URL, resolveDevice(device), "volume", Number(val), undefined, env.CATT_BACKEND_SECRET);
     }
     return "volume";
+  }
+  if (command === "device") {
+    const key = rawValue.trim() || device;
+    await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(key)}`));
+    return "device";
   }
   if (command === "channel") {
     const arg = rawValue.trim() || device;
@@ -128,6 +134,15 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
   }
 
   const { device, rawValue } = parseTokens(rest);
+
+  if (command === "device") {
+    const key = rawValue.trim() || device;
+    await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(key)}`));
+    const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+    const json = await res.json();
+    return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
+  }
+
   ctx.waitUntil(dispatchCommand(command, device, rawValue, env, doStub));
   return new Response(command, { status: 200 });
 }
@@ -186,7 +201,7 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
   const { device, rawValue } = parseTokens(rest);
   await dispatchCommand(command, device, rawValue, env, doStub);
 
-  if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset")) {
+  if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset" || command === "device")) {
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
     const json = await res.json();
     await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
