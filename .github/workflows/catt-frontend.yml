@@ -34,7 +34,7 @@ jobs:
 
       - name: Deploy
         working-directory: catt_frontend
-        run: npx wrangler pages deploy public --project-name catt-frontend
+        run: npx wrangler pages deploy public --project-name gha-catt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           WRANGLER_SEND_METRICS: false

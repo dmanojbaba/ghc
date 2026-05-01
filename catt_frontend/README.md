@@ -42,18 +42,18 @@ BUTTONS_CONFIG=[{"label":"ping","command":"channel","value":"ping"}]
 
 In the Cloudflare dashboard:
 1. Go to **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
-2. Select this repository, set the **project name** to `catt-frontend`
+2. Select this repository, set the **project name** to `gha-catt`
 3. Set **build output directory** to `public`
 4. Leave the build command empty (no build step needed)
 
 Or create it via CLI (one-time):
 ```bash
-npx wrangler pages project create catt-frontend
+npx wrangler pages project create gha-catt
 ```
 
 ### 2. Set secrets
 
-In the Cloudflare dashboard go to **Workers & Pages** → `catt-frontend` → **Settings** → **Environment variables**.
+In the Cloudflare dashboard go to **Workers & Pages** → `gha-catt` → **Settings** → **Environment variables**.
 
 Add the following as **Secrets** (encrypted):
 
@@ -78,7 +78,7 @@ Add the following as **Variables** (plain text):
 
 ### 3. Set custom domain
 
-In the Cloudflare dashboard go to **Workers & Pages** → `catt-frontend` → **Custom domains** → **Set up a custom domain** → enter `frontend.example.com`.
+In the Cloudflare dashboard go to **Workers & Pages** → `gha-catt` → **Custom domains** → **Set up a custom domain** → enter `frontend.example.com`.
 
 ### 4. Deploy
 
@@ -86,7 +86,7 @@ Push to `main` — GitHub Actions deploys automatically. Or deploy manually:
 
 ```bash
 cd catt_frontend
-npx wrangler pages deploy public --project-name catt-frontend
+npx wrangler pages deploy public --project-name gha-catt
 ```
 
 ---
