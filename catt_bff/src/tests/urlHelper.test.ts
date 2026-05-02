@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getParsedUrl, getPlaylistItems } from "../urlHelper";
+import { getParsedUrl, getPlaylistItems, extractYouTubePlaylistId } from "../urlHelper";
 
 const BASE_YOUTUBE  = "https://www.youtube.com/watch?v=";
 const REDIRECT_URL  = process.env.REDIRECT_URL!;
@@ -145,6 +145,44 @@ describe("getPlaylistItems", () => {
     await expect(getPlaylistItems("apikey", "PLtest", REDIRECT_URL)).rejects.toThrow("network error");
   });
 
+  it("reorders from startVideoId when found in playlist", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        items: [
+          { snippet: { resourceId: { videoId: "vid1" } } },
+          { snippet: { resourceId: { videoId: "vid2" } } },
+          { snippet: { resourceId: { videoId: "vid3" } } },
+        ],
+      }),
+    }));
+    const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL, 50, "vid2");
+    expect(result.first).toBe(BASE_YOUTUBE + "vid2");
+    expect(result.rest).toEqual([BASE_YOUTUBE + "vid3"]);
+  });
+
+  it("plays startVideoId directly and queues full playlist when not found", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        items: [
+          { snippet: { resourceId: { videoId: "vid1" } } },
+          { snippet: { resourceId: { videoId: "vid2" } } },
+        ],
+      }),
+    }));
+    const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL, 50, "vid99");
+    expect(result.first).toBe(BASE_YOUTUBE + "vid99");
+    expect(result.rest).toEqual([BASE_YOUTUBE + "vid1", BASE_YOUTUBE + "vid2"]);
+  });
+
+  it("plays startVideoId directly when playlist is empty", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ items: [] }),
+    }));
+    const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL, 50, "vid99");
+    expect(result.first).toBe(BASE_YOUTUBE + "vid99");
+    expect(result.rest).toEqual([]);
+  });
+
   it("calls YouTube API with correct params", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       json: () => Promise.resolve({ items: [] }),
@@ -161,5 +199,31 @@ describe("getPlaylistItems", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining("maxResults=5"),
     );
+  });
+});
+
+describe("extractYouTubePlaylistId", () => {
+  it("extracts list param from youtube.com playlist URL", () => {
+    expect(extractYouTubePlaylistId("https://www.youtube.com/playlist?list=PLtest123")).toEqual({ playlistId: "PLtest123", videoId: null });
+  });
+
+  it("extracts list and video param from youtube.com watch URL with list", () => {
+    expect(extractYouTubePlaylistId("https://www.youtube.com/watch?v=abc&list=PLtest123")).toEqual({ playlistId: "PLtest123", videoId: "abc" });
+  });
+
+  it("returns null for youtube.com URL without list param", () => {
+    expect(extractYouTubePlaylistId("https://www.youtube.com/watch?v=abc")).toBeNull();
+  });
+
+  it("returns null for non-YouTube URL", () => {
+    expect(extractYouTubePlaylistId("https://vimeo.com/123")).toBeNull();
+  });
+
+  it("returns null for bare string", () => {
+    expect(extractYouTubePlaylistId("believer song")).toBeNull();
+  });
+
+  it("returns null for youtu.be URL (no playlist support)", () => {
+    expect(extractYouTubePlaylistId("https://youtu.be/abc")).toBeNull();
   });
 });

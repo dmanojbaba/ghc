@@ -494,6 +494,35 @@ describe("handleTelegram — bare device alias shorthand", () => {
   });
 });
 
+describe("handleSlack — cast with channel key routes to channel", () => {
+  it("routes cast with known channel key to channel", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const request = await makeSlackRequest("cast ping", env);
+    await handleSlack(request, env, makeCtx(), stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/channel/ping");
+  });
+
+  it("routes cast with URL directly to catt (not channel)", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const request = await makeSlackRequest("cast https://youtu.be/abc", env);
+    await handleSlack(request, env, makeCtx(), stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/catt");
+  });
+
+  it("routes cast with free text to catt (not channel)", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const request = await makeSlackRequest("cast believer song", env);
+    await handleSlack(request, env, makeCtx(), stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/catt");
+  });
+});
+
 describe("handleSlack — tts aliases", () => {
   it("speak routes to DO /site/ with encoded text", async () => {
     const env = makeEnv();

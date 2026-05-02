@@ -1,5 +1,5 @@
 import { castCommand } from "./catt";
-import { resolveDevice, INPUT_TO_DEVICE } from "./devices";
+import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, DEVICE_ID } from "./devices";
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 
@@ -85,9 +85,15 @@ async function dispatchCommand(
     await doStub.fetch(new Request(`https://do/device/box/mute/${muted}`));
     return "mute";
   }
+  const val = rawValue.trim();
+  const channelKey = val && !val.startsWith("http") ? getChannelKey(DEVICE_ID, val) : null;
+  if (channelKey) {
+    await doStub.fetch(new Request(`https://do/device/box/channel/${encodeURIComponent(channelKey)}`));
+    return "channel";
+  }
   await doStub.fetch(new Request("https://do/device/box/catt", {
     method: "POST",
-    body: JSON.stringify({ command: "cast", device, value: rawValue.trim() }),
+    body: JSON.stringify({ command: "cast", device, value: val }),
   }));
   return "cast";
 }

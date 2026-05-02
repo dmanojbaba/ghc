@@ -1,5 +1,5 @@
 import { castCommand, getStatus, getInfo } from "./catt";
-import { getPlaylistItems, getParsedUrl } from "./urlHelper";
+import { getPlaylistItems, getParsedUrl, extractYouTubePlaylistId } from "./urlHelper";
 import {
   DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_CHANNEL, DEFAULT_SLEEP_AT,
   resolveDevice, isAudioOnlyInput, getInputKey, getAdjacentChannel, getChannelKey, DEVICE_ID,
@@ -142,12 +142,12 @@ export class DeviceQueue implements DurableObject {
     await this.clearState();
   }
 
-  async shuffle(playlistId: string): Promise<void> {
+  async shuffle(playlistId: string, startVideoId?: string): Promise<void> {
     const device = resolveDevice(this.get("device"));
     let first: string;
     let rest: string[];
     try {
-      ({ first, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId, this.env.REDIRECT_URL));
+      ({ first, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId, this.env.REDIRECT_URL, 50, startVideoId));
     } catch {
       this.set("session", DEFAULT_SESSION);
       await this.state.storage.deleteAlarm();
@@ -373,18 +373,34 @@ export class DeviceQueue implements DurableObject {
           if (!hasValue) {
             await this.advance(true);
           } else if (deviceArg === "queue") {
-            await this.enqueue(getParsedUrl(val, this.env.REDIRECT_URL));
+            const playlist = extractYouTubePlaylistId(val);
+            if (playlist && this.env.YOUTUBE_API_KEY) {
+              const { first, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlist.playlistId, this.env.REDIRECT_URL, 50, playlist.videoId ?? undefined);
+              await this.enqueue(first);
+              const now = new Date().toISOString();
+              for (const url of rest) {
+                this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", url, null, now);
+              }
+            } else {
+              await this.enqueue(getParsedUrl(val, this.env.REDIRECT_URL));
+            }
           } else {
-            const parsedUrl = getParsedUrl(val, this.env.REDIRECT_URL);
-            this.sql.exec("DELETE FROM queue");
-            await this.state.storage.deleteAlarm();
-            await castCommand(this.serverUrl, device, "cast", parsedUrl, {
-              force_default: this.forceDefault(),
-            }, this.secret);
-            this.set("prev", parsedUrl);
-            this.recordHistory(parsedUrl);
-            this.set("session", "active");
-            await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
+            const playlist = extractYouTubePlaylistId(val);
+            if (playlist && this.env.YOUTUBE_API_KEY) {
+              this.set("playlist", playlist.playlistId);
+              await this.shuffle(playlist.playlistId, playlist.videoId ?? undefined);
+            } else {
+              const parsedUrl = getParsedUrl(val, this.env.REDIRECT_URL);
+              this.sql.exec("DELETE FROM queue");
+              await this.state.storage.deleteAlarm();
+              await castCommand(this.serverUrl, device, "cast", parsedUrl, {
+                force_default: this.forceDefault(),
+              }, this.secret);
+              this.set("prev", parsedUrl);
+              this.recordHistory(parsedUrl);
+              this.set("session", "active");
+              await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
+            }
           }
 
         } else if (cmd === "site") {

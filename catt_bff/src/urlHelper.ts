@@ -51,11 +51,26 @@ export function getParsedUrl(url: string, redirectUrl: string, ytVideoId = false
   return redirectUrl + "/r/" + encodeURIComponent(url);
 }
 
+export function extractYouTubePlaylistId(url: string): { playlistId: string; videoId: string | null } | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!["www.youtube.com", "youtube.com", "music.youtube.com"].includes(parsed.hostname)) return null;
+  const playlistId = parsed.searchParams.get("list");
+  if (!playlistId) return null;
+  const videoId = parsed.searchParams.get("v");
+  return { playlistId, videoId };
+}
+
 export async function getPlaylistItems(
   apiKey: string,
   playlistId: string,
   redirectUrl: string,
-  maxResults = 10,
+  maxResults = 50,
+  startVideoId?: string,
 ): Promise<{ first: string; rest: string[] }> {
   const url =
     `https://www.googleapis.com/youtube/v3/playlistItems` +
@@ -65,9 +80,23 @@ export async function getPlaylistItems(
   const data = await res.json() as { items?: Array<{ snippet: { resourceId: { videoId: string } } }> };
 
   if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
+    if (startVideoId) return { first: BASE_YOUTUBE + startVideoId, rest: [] };
     return { first: getParsedUrl(DEFAULT_PREV, redirectUrl), rest: [] };
   }
 
   const urls = data.items.map((item) => getParsedUrl(item.snippet.resourceId.videoId, redirectUrl, true));
+
+  if (startVideoId) {
+    const startUrl = BASE_YOUTUBE + startVideoId;
+    const idx = urls.indexOf(startUrl);
+    if (idx === -1) {
+      // video not found in playlist — play it directly, queue the full playlist after
+      return { first: startUrl, rest: urls };
+    }
+    // play from idx to end, no wrap
+    const from = urls.slice(idx);
+    return { first: from[0], rest: from.slice(1) };
+  }
+
   return { first: urls[0], rest: urls.slice(1) };
 }
