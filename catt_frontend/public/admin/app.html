@@ -12,7 +12,10 @@
     <!-- State bar -->
     <div class="section">
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span id="s-session-pill" style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-size:0.85rem; font-weight:600; background:var(--border); color:var(--text2);">— —</span>
+        <span id="s-session-pill" style="display:inline-flex; align-items:center; gap:8px; font-size:0.85rem; color:var(--text2);">
+          <span id="s-session-dot" style="width:10px; height:10px; border-radius:50%; background:#9ca3af; flex-shrink:0;"></span>
+          <span id="s-session-label">idle</span>
+        </span>
         <button class="btn" id="logout-btn" style="min-height:36px; padding:6px 14px; font-size:0.85rem;">Log out</button>
       </div>
     </div>
@@ -147,17 +150,10 @@
     }
 
     function renderState(data) {
-      const pill = document.getElementById('s-session-pill');
       const session = data.session ?? 'idle';
-      const pillMap = {
-        active: { icon: '▶', label: 'active', bg: '#166534', color: '#bbf7d0' },
-        paused: { icon: '⏸', label: 'paused', bg: '#78350f', color: '#fde68a' },
-        idle:   { icon: '⏹', label: 'idle',   bg: 'var(--border)', color: 'var(--text2)' },
-      };
-      const p = pillMap[session] ?? pillMap.idle;
-      pill.style.background = p.bg;
-      pill.style.color = p.color;
-      pill.textContent = `${p.icon} ${p.label}`;
+      const dotMap = { active: '#22c55e', paused: '#f59e0b', idle: '#9ca3af' };
+      document.getElementById('s-session-dot').style.background = dotMap[session] ?? dotMap.idle;
+      document.getElementById('s-session-label').textContent = session;
       document.getElementById('s-app').textContent = data.app ?? '—';
       document.getElementById('s-alarm').textContent = formatTime(data.alarm);
       document.getElementById('s-channel').textContent = data.channel ?? '—';
