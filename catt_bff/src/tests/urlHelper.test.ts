@@ -96,27 +96,32 @@ describe("getPlaylistItems", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       json: () => Promise.resolve({
         items: [
-          { snippet: { resourceId: { videoId: "vid1" } } },
-          { snippet: { resourceId: { videoId: "vid2" } } },
-          { snippet: { resourceId: { videoId: "vid3" } } },
+          { snippet: { resourceId: { videoId: "vid1" }, title: "Video One" } },
+          { snippet: { resourceId: { videoId: "vid2" }, title: "Video Two" } },
+          { snippet: { resourceId: { videoId: "vid3" }, title: "Video Three" } },
         ],
       }),
     }));
 
     const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL);
     expect(result.first).toBe(BASE_YOUTUBE + "vid1");
-    expect(result.rest).toEqual([BASE_YOUTUBE + "vid2", BASE_YOUTUBE + "vid3"]);
+    expect(result.firstTitle).toBe("Video One");
+    expect(result.rest).toEqual([
+      { url: BASE_YOUTUBE + "vid2", title: "Video Two" },
+      { url: BASE_YOUTUBE + "vid3", title: "Video Three" },
+    ]);
   });
 
   it("returns only first when playlist has one item", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       json: () => Promise.resolve({
-        items: [{ snippet: { resourceId: { videoId: "vid1" } } }],
+        items: [{ snippet: { resourceId: { videoId: "vid1" }, title: "Video One" } }],
       }),
     }));
 
     const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL);
     expect(result.first).toBe(BASE_YOUTUBE + "vid1");
+    expect(result.firstTitle).toBe("Video One");
     expect(result.rest).toEqual([]);
   });
 
@@ -127,6 +132,7 @@ describe("getPlaylistItems", () => {
 
     const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL);
     expect(result.first).toBe(BASE_REDIRECT + "pingr2");
+    expect(result.firstTitle).toBeNull();
     expect(result.rest).toEqual([]);
   });
 
@@ -137,6 +143,7 @@ describe("getPlaylistItems", () => {
 
     const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL);
     expect(result.first).toBe(BASE_REDIRECT + "pingr2");
+    expect(result.firstTitle).toBeNull();
     expect(result.rest).toEqual([]);
   });
 
@@ -149,29 +156,34 @@ describe("getPlaylistItems", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       json: () => Promise.resolve({
         items: [
-          { snippet: { resourceId: { videoId: "vid1" } } },
-          { snippet: { resourceId: { videoId: "vid2" } } },
-          { snippet: { resourceId: { videoId: "vid3" } } },
+          { snippet: { resourceId: { videoId: "vid1" }, title: "Video One" } },
+          { snippet: { resourceId: { videoId: "vid2" }, title: "Video Two" } },
+          { snippet: { resourceId: { videoId: "vid3" }, title: "Video Three" } },
         ],
       }),
     }));
     const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL, 50, "vid2");
     expect(result.first).toBe(BASE_YOUTUBE + "vid2");
-    expect(result.rest).toEqual([BASE_YOUTUBE + "vid3"]);
+    expect(result.firstTitle).toBe("Video Two");
+    expect(result.rest).toEqual([{ url: BASE_YOUTUBE + "vid3", title: "Video Three" }]);
   });
 
   it("plays startVideoId directly and queues full playlist when not found", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       json: () => Promise.resolve({
         items: [
-          { snippet: { resourceId: { videoId: "vid1" } } },
-          { snippet: { resourceId: { videoId: "vid2" } } },
+          { snippet: { resourceId: { videoId: "vid1" }, title: "Video One" } },
+          { snippet: { resourceId: { videoId: "vid2" }, title: "Video Two" } },
         ],
       }),
     }));
     const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL, 50, "vid99");
     expect(result.first).toBe(BASE_YOUTUBE + "vid99");
-    expect(result.rest).toEqual([BASE_YOUTUBE + "vid1", BASE_YOUTUBE + "vid2"]);
+    expect(result.firstTitle).toBeNull();
+    expect(result.rest).toEqual([
+      { url: BASE_YOUTUBE + "vid1", title: "Video One" },
+      { url: BASE_YOUTUBE + "vid2", title: "Video Two" },
+    ]);
   });
 
   it("plays startVideoId directly when playlist is empty", async () => {
@@ -180,7 +192,28 @@ describe("getPlaylistItems", () => {
     }));
     const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL, 50, "vid99");
     expect(result.first).toBe(BASE_YOUTUBE + "vid99");
+    expect(result.firstTitle).toBeNull();
     expect(result.rest).toEqual([]);
+  });
+
+  it("truncates title to 40 characters", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        items: [{ snippet: { resourceId: { videoId: "vid1" }, title: "A".repeat(60) } }],
+      }),
+    }));
+    const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL);
+    expect(result.firstTitle).toBe("A".repeat(40));
+  });
+
+  it("sets title to null when title is missing", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        items: [{ snippet: { resourceId: { videoId: "vid1" } } }],
+      }),
+    }));
+    const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL);
+    expect(result.firstTitle).toBeNull();
   });
 
   it("calls YouTube API with correct params", async () => {

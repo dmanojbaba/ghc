@@ -145,7 +145,7 @@ export class DeviceQueue implements DurableObject {
   async shuffle(playlistId: string, startVideoId?: string): Promise<void> {
     const device = resolveDevice(this.get("device"));
     let first: string;
-    let rest: string[];
+    let rest: Array<{ url: string; title: string | null }>;
     try {
       ({ first, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId, this.env.REDIRECT_URL, 50, startVideoId));
     } catch {
@@ -155,8 +155,8 @@ export class DeviceQueue implements DurableObject {
     }
     this.sql.exec("DELETE FROM queue");
     const now = new Date().toISOString();
-    for (const url of rest) {
-      this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", url, null, now);
+    for (const item of rest) {
+      this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", item.url, item.title, now);
     }
     this.set("prev", first);
     this.recordHistory(first);
@@ -268,8 +268,8 @@ export class DeviceQueue implements DurableObject {
 
   async getState(): Promise<Record<string, unknown>> {
     const rows = this.sql
-      .exec<{ position: number; url: string }>(
-        "SELECT position, url FROM queue ORDER BY position ASC",
+      .exec<{ position: number; url: string; title: string | null }>(
+        "SELECT position, url, title FROM queue ORDER BY position ASC",
       )
       .toArray();
 
@@ -288,7 +288,7 @@ export class DeviceQueue implements DurableObject {
       next:      rows[0]?.url ?? DEFAULT_NEXT,
       playlist:  this.get("playlist"),
       tts:       this.get("tts"),
-      queue:     rows.map((r) => ({ position: r.position, url: r.url })),
+      queue:     rows.map((r) => ({ position: r.position, url: r.url, title: r.title ?? null })),
     };
   }
 
@@ -375,11 +375,11 @@ export class DeviceQueue implements DurableObject {
           } else if (deviceArg === "queue") {
             const playlist = extractYouTubePlaylistId(val);
             if (playlist && this.env.YOUTUBE_API_KEY) {
-              const { first, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlist.playlistId, this.env.REDIRECT_URL, 50, playlist.videoId ?? undefined);
-              await this.enqueue(first);
+              const { first, firstTitle, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlist.playlistId, this.env.REDIRECT_URL, 50, playlist.videoId ?? undefined);
+              await this.enqueue(first, firstTitle ?? undefined);
               const now = new Date().toISOString();
-              for (const url of rest) {
-                this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", url, null, now);
+              for (const item of rest) {
+                this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", item.url, item.title, now);
               }
             } else {
               await this.enqueue(getParsedUrl(val, this.env.REDIRECT_URL));

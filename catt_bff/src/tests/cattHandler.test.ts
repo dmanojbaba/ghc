@@ -62,6 +62,20 @@ describe("handleCatt — cast channel redirect", () => {
     expect(url).toContain("/device/box/channel/ping");
   });
 
+  it("redirects cast with device=queue of a known channel key to /device/box/channel/:key", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "cast", device: "queue", value: "ping" }), makeEnv(), stub);
+    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
+    expect(url).toContain("/device/box/channel/ping");
+  });
+
+  it("redirects cast with device=queue of a channel name (case-insensitive) to /device/box/channel/:key", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "cast", device: "queue", value: "Ping" }), makeEnv(), stub);
+    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
+    expect(url).toContain("/device/box/channel/ping");
+  });
+
   it("does not redirect cast of a URL to channel route", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "cast", value: "https://example.com/video" }), makeEnv(), stub);

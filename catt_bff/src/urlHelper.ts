@@ -71,32 +71,34 @@ export async function getPlaylistItems(
   redirectUrl: string,
   maxResults = 50,
   startVideoId?: string,
-): Promise<{ first: string; rest: string[] }> {
+): Promise<{ first: string; firstTitle: string | null; rest: Array<{ url: string; title: string | null }> }> {
   const url =
     `https://www.googleapis.com/youtube/v3/playlistItems` +
     `?part=snippet&key=${apiKey}&maxResults=${maxResults}&playlistId=${playlistId}`;
 
   const res  = await fetch(url);
-  const data = await res.json() as { items?: Array<{ snippet: { resourceId: { videoId: string } } }> };
+  const data = await res.json() as { items?: Array<{ snippet: { resourceId: { videoId: string }; title: string } }> };
 
   if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
-    if (startVideoId) return { first: BASE_YOUTUBE + startVideoId, rest: [] };
-    return { first: getParsedUrl(DEFAULT_PREV, redirectUrl), rest: [] };
+    if (startVideoId) return { first: BASE_YOUTUBE + startVideoId, firstTitle: null, rest: [] };
+    return { first: getParsedUrl(DEFAULT_PREV, redirectUrl), firstTitle: null, rest: [] };
   }
 
-  const urls = data.items.map((item) => getParsedUrl(item.snippet.resourceId.videoId, redirectUrl, true));
+  const items = data.items.map((item) => ({
+    url:   getParsedUrl(item.snippet.resourceId.videoId, redirectUrl, true),
+    title: item.snippet.title ? item.snippet.title.slice(0, 40) : null,
+  }));
+  const urls = items.map((i) => i.url);
 
   if (startVideoId) {
     const startUrl = BASE_YOUTUBE + startVideoId;
     const idx = urls.indexOf(startUrl);
     if (idx === -1) {
-      // video not found in playlist — play it directly, queue the full playlist after
-      return { first: startUrl, rest: urls };
+      return { first: startUrl, firstTitle: null, rest: items };
     }
-    // play from idx to end, no wrap
-    const from = urls.slice(idx);
-    return { first: from[0], rest: from.slice(1) };
+    const from = items.slice(idx);
+    return { first: from[0].url, firstTitle: from[0].title, rest: from.slice(1) };
   }
 
-  return { first: urls[0], rest: urls.slice(1) };
+  return { first: items[0].url, firstTitle: items[0].title, rest: items.slice(1) };
 }

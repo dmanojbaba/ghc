@@ -183,7 +183,7 @@
         queueList.innerHTML = '<li class="empty-msg">Empty</li>';
       } else {
         queueList.innerHTML = queue.map(item =>
-          `<li data-pos="${item.position}"><a href="${item.url}" target="_blank" rel="noopener">${item.url}</a></li>`
+          `<li data-pos="${item.position}"><a href="${item.url}" target="_blank" rel="noopener">${item.title ?? item.url}</a></li>`
         ).join('');
       }
 
