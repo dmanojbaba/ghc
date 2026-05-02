@@ -117,7 +117,7 @@ Not implemented in code — Cloudflare WAF rate limiting on auth endpoints handl
 │  [preset]  [preset]                  │
 ├──────────────────────────────────────┤ ← only if UI_KIDS_ALLOW_SEARCH=true
 │  Search                              │
-│  [search input ____________] [Play]  │
+│  [search input ________] [Play] [Queue] │
 ├──────────────────────────────────────┤
 │  Playback                            │  ← always-present
 │  [Prev] [Play/Pause] [Stop] [Next]   │
@@ -170,7 +170,7 @@ The Pages Function serves `BUTTONS_CONFIG` as JSON at `GET /api/config` (kids co
 │  [btn] [btn] [btn] [btn] ...                     │    fluid grid (same as kids preset-grid); hidden when empty
 ├─────────────────────────────────────────────────┤
 │ Cast                                             │  ← cast input
-│ [url/search input ___________________] [Cast]    │
+│ [url/search input ___________________] [Cast] [Queue] │
 │ TTS                                              │
 │ [text input _________________________] [Speak]   │
 ├─────────────────────────────────────────────────┤

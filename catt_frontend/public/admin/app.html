@@ -37,6 +37,7 @@
       <div class="input-row">
         <input id="cast-input" type="text" placeholder="URL or search query">
         <button class="btn" id="cast-btn">Cast</button>
+        <button class="btn" id="queue-btn">Queue</button>
       </div>
       <span class="section-label">TTS</span>
       <div class="input-row">
@@ -283,6 +284,15 @@
         if (!val) return;
         withLoading(document.getElementById('cast-btn'), async () => {
           await postCommand({ command: 'cast', value: val });
+          document.getElementById('cast-input').value = '';
+        });
+      });
+
+      document.getElementById('queue-btn').addEventListener('click', () => {
+        const val = document.getElementById('cast-input').value.trim();
+        if (!val) return;
+        withLoading(document.getElementById('queue-btn'), async () => {
+          await postCommand({ command: 'cast', device: 'queue', value: val });
           document.getElementById('cast-input').value = '';
         });
       });

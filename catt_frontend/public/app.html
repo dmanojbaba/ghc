@@ -34,6 +34,7 @@
       <div class="search-row">
         <input id="search-input" type="text" placeholder="Search or paste a URL..." autocomplete="off">
         <button class="btn" id="search-btn">Play</button>
+        <button class="btn" id="queue-btn">Queue</button>
       </div>
     </div>
 
@@ -152,6 +153,15 @@
         if (!val) return;
         withLoading(searchBtn, async () => {
           await postCommand({ command: 'cast', value: val });
+          searchInput.value = '';
+        });
+      });
+      const queueBtn = document.getElementById('queue-btn');
+      queueBtn.addEventListener('click', () => {
+        const val = searchInput.value.trim();
+        if (!val) return;
+        withLoading(queueBtn, async () => {
+          await postCommand({ command: 'cast', device: 'queue', value: val });
           searchInput.value = '';
         });
       });
