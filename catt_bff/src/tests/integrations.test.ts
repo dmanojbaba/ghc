@@ -192,6 +192,82 @@ function makeTelegramRequest(text: string, chatId: number): Request {
   });
 }
 
+describe("handleSlack — state queue truncation", () => {
+  it("truncates queue to 5 items with a count suffix when queue has more than 5 items", async () => {
+    const env = makeEnv();
+    const queue = Array.from({ length: 10 }, (_, i) => ({ position: i, url: `https://example.com/${i}` }));
+    const state = { session: "idle", device: "o", queue };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const request = await makeSlackRequest("state", env);
+    const res = await handleSlack(request, env, makeCtx(), stub);
+    const text = await res.text();
+    const json = JSON.parse(text.replace(/```\n?/g, ""));
+    expect(json.queue).toHaveLength(6);
+    expect(json.queue[5]).toBe("… 5 more");
+  });
+
+  it("does not truncate queue when 5 or fewer items", async () => {
+    const env = makeEnv();
+    const queue = Array.from({ length: 5 }, (_, i) => ({ position: i, url: `https://example.com/${i}` }));
+    const state = { session: "idle", device: "o", queue };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const request = await makeSlackRequest("state", env);
+    const res = await handleSlack(request, env, makeCtx(), stub);
+    const text = await res.text();
+    const json = JSON.parse(text.replace(/```\n?/g, ""));
+    expect(json.queue).toHaveLength(5);
+  });
+});
+
+describe("handleTelegram — state queue truncation", () => {
+  it("truncates queue to 5 items with a count suffix when queue has more than 5 items", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const queue = Array.from({ length: 10 }, (_, i) => ({ position: i, url: `https://example.com/${i}` }));
+    const state = { session: "idle", device: "o", queue };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const env = makeEnv();
+    await handleTelegram(makeTelegramRequest("state", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    const sent = JSON.parse(body.text.replace(/<\/?pre>/g, ""));
+    expect(sent.queue).toHaveLength(6);
+    expect(sent.queue[5]).toBe("… 5 more");
+  });
+
+  it("does not truncate queue when 5 or fewer items", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const queue = Array.from({ length: 5 }, (_, i) => ({ position: i, url: `https://example.com/${i}` }));
+    const state = { session: "idle", device: "o", queue };
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/state")) return new Response(JSON.stringify(state));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const env = makeEnv();
+    await handleTelegram(makeTelegramRequest("state", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    const sent = JSON.parse(body.text.replace(/<\/?pre>/g, ""));
+    expect(sent.queue).toHaveLength(5);
+  });
+});
+
 describe("handleTelegram — chat ID allowlist", () => {
   it("allows any chat when TELEGRAM_ALLOWED_CHAT_IDS is not set", async () => {
     const env = makeEnv({ TELEGRAM_ALLOWED_CHAT_IDS: "" });

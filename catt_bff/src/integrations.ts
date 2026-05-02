@@ -135,14 +135,14 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
 
   if (command === "state") {
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
-    const json = await res.json();
+    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
   if (command in INPUT_TO_DEVICE) {
     await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(command)}`));
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
-    const json = await res.json();
+    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
@@ -151,7 +151,7 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
   if (command === "device" || command === "clear" || command === "reset") {
     await dispatchCommand(command, device, rawValue, env, doStub);
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
-    const json = await res.json();
+    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
@@ -163,6 +163,13 @@ function verifyTelegramSecret(request: Request, env: Env): boolean {
   const secret = env.TELEGRAM_SECRET_TOKEN;
   if (!secret) return true;
   return request.headers.get("X-Telegram-Bot-Api-Secret-Token") === secret;
+}
+
+function truncateStateQueue(json: Record<string, unknown>): Record<string, unknown> {
+  if (Array.isArray(json.queue) && json.queue.length > 5) {
+    return { ...json, queue: [...json.queue.slice(0, 5), `… ${json.queue.length - 5} more`] };
+  }
+  return json;
 }
 
 function escapeHtml(text: string): string {
@@ -204,7 +211,7 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
     }
     if (command === "state") {
       const res   = await doStub.fetch(new Request("https://do/device/box/state"));
-      const json  = await res.json();
+      const json  = truncateStateQueue(await res.json() as Record<string, unknown>);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
       return Response.json({});
     }
@@ -214,7 +221,7 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
     await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(command)}`));
     if (chatId && env.TELEGRAM_BOT_TOKEN) {
       const res  = await doStub.fetch(new Request("https://do/device/box/state"));
-      const json = await res.json();
+      const json = truncateStateQueue(await res.json() as Record<string, unknown>);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
     }
     return Response.json({});
@@ -225,7 +232,7 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
 
   if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset" || command === "device")) {
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
-    const json = await res.json();
+    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
     await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
   }
 
