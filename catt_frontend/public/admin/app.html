@@ -11,13 +11,8 @@
 
     <!-- State bar -->
     <div class="section">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
-        <div>
-          <div class="state-bar" id="state-bar">
-            <span>session: <span class="state-val" id="s-session">—</span></span>
-            <span>alarm: <span class="state-val" id="s-alarm">—</span></span>
-          </div>
-        </div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span id="s-session-pill" style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-size:0.85rem; font-weight:600; background:var(--border); color:var(--text2);">— —</span>
         <button class="btn" id="logout-btn" style="min-height:36px; padding:6px 14px; font-size:0.85rem;">Log out</button>
       </div>
     </div>
@@ -86,9 +81,10 @@
 
     <!-- Sleep timer -->
     <div class="section">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="section-label">Sleep timer</span>
-        <span style="font-size:0.8rem; color:var(--text2);">sleep_at: <span class="state-val" id="s-sleep">—</span></span>
+      <span class="section-label">Sleep timer</span>
+      <div style="display:flex; justify-content:space-between; gap:16px; font-size:0.85rem; color:var(--text2);">
+        <span>sleep_at: <span class="state-val" id="s-sleep">—</span></span>
+        <span>alarm: <span class="state-val" id="s-alarm">—</span></span>
       </div>
       <div class="playback-row">
         <input id="sleep-input" type="number" min="1" max="600" placeholder="mins"
@@ -151,7 +147,17 @@
     }
 
     function renderState(data) {
-      document.getElementById('s-session').textContent = data.session ?? '—';
+      const pill = document.getElementById('s-session-pill');
+      const session = data.session ?? 'idle';
+      const pillMap = {
+        active: { icon: '▶', label: 'active', bg: '#166534', color: '#bbf7d0' },
+        paused: { icon: '⏸', label: 'paused', bg: '#78350f', color: '#fde68a' },
+        idle:   { icon: '⏹', label: 'idle',   bg: 'var(--border)', color: 'var(--text2)' },
+      };
+      const p = pillMap[session] ?? pillMap.idle;
+      pill.style.background = p.bg;
+      pill.style.color = p.color;
+      pill.textContent = `${p.icon} ${p.label}`;
       document.getElementById('s-app').textContent = data.app ?? '—';
       document.getElementById('s-alarm').textContent = formatTime(data.alarm);
       document.getElementById('s-channel').textContent = data.channel ?? '—';
