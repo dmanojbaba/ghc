@@ -268,8 +268,8 @@ export class DeviceQueue implements DurableObject {
 
   async getState(): Promise<Record<string, unknown>> {
     const rows = this.sql
-      .exec<{ url: string; title: string | null }>(
-        "SELECT url, title FROM queue ORDER BY position ASC",
+      .exec<{ position: number; url: string; title: string | null }>(
+        "SELECT position, url, title FROM queue ORDER BY position ASC",
       )
       .toArray();
 
@@ -288,7 +288,7 @@ export class DeviceQueue implements DurableObject {
       next:      rows[0]?.url ?? DEFAULT_NEXT,
       playlist:  this.get("playlist"),
       tts:       this.get("tts"),
-      queue:     rows.map((r) => ({ url: r.url, title: r.title ?? null })),
+      queue:     rows.map((r) => ({ position: r.position, url: r.url, title: r.title ?? null })),
     };
   }
 
@@ -433,6 +433,14 @@ export class DeviceQueue implements DurableObject {
         }, this.secret);
         this.set("session", "active");
         await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
+        return new Response("ok");
+      }
+
+      case "jump": {
+        const position = Number(parts[3]);
+        if (isNaN(position)) return new Response("invalid position", { status: 400 });
+        this.sql.exec("DELETE FROM queue WHERE position < ?", position);
+        await this.advance(true);
         return new Response("ok");
       }
 

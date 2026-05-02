@@ -30,6 +30,15 @@ function makeRequest(body: Record<string, unknown>) {
 
 beforeEach(() => vi.restoreAllMocks());
 
+describe("handleCatt — jump command", () => {
+  it("routes jump to /device/box/jump/:position", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "jump", value: "42" }), makeEnv(), stub);
+    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
+    expect(url).toContain("/device/box/jump/42");
+  });
+});
+
 describe("handleCatt — tts command", () => {
   it("routes tts to /device/box/site/:value", async () => {
     const stub = makeDoStub();

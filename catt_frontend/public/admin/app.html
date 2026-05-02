@@ -176,6 +176,8 @@
         ytBtn.classList.toggle('active', data.app === 'youtube');
       }
 
+      const extLinkIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+
       // queue
       const queueList = document.getElementById('queue-list');
       const queue = data.queue ?? [];
@@ -183,8 +185,14 @@
         queueList.innerHTML = '<li class="empty-msg">Empty</li>';
       } else {
         queueList.innerHTML = queue.map(item =>
-          `<li><a href="${item.url}" target="_blank" rel="noopener">${item.title ?? item.url}</a></li>`
+          `<li data-pos="${item.position}"><a href="#" class="queue-jump-link" data-pos="${item.position}">${item.title ?? item.url}</a> <a href="${item.url}" target="_blank" rel="noopener" style="color:var(--text2);" title="Open in new tab">${extLinkIcon}</a></li>`
         ).join('');
+        queueList.querySelectorAll('.queue-jump-link').forEach(a => {
+          a.addEventListener('click', e => {
+            e.preventDefault();
+            withLoading(a, () => postCommand({ command: 'jump', value: String(a.dataset.pos) }));
+          });
+        });
       }
 
       // history
@@ -194,8 +202,14 @@
         historyList.innerHTML = '<li class="empty-msg">No history</li>';
       } else {
         historyList.innerHTML = history.map(item =>
-          `<li><a href="${item.url}" target="_blank" rel="noopener">${item.url}</a></li>`
+          `<li><a href="#" data-url="${item.url}" class="history-play">${item.url}</a> <a href="${item.url}" target="_blank" rel="noopener" style="color:var(--text2);" title="Open in new tab">${extLinkIcon}</a></li>`
         ).join('');
+        historyList.querySelectorAll('.history-play').forEach(a => {
+          a.addEventListener('click', e => {
+            e.preventDefault();
+            withLoading(a, () => postCommand({ command: 'cast', device: 'queue', value: a.dataset.url }));
+          });
+        });
       }
     }
 

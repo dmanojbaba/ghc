@@ -29,6 +29,11 @@ export async function handleCatt(request: Request, _env: Env, doStub: DurableObj
     return doStub.fetch(new Request(`https://do/device/box/channel/${arg}`));
   }
 
+  if (body.command === "jump") {
+    const pos = encodeURIComponent(body.value ?? "");
+    return doStub.fetch(new Request(`https://do/device/box/jump/${pos}`));
+  }
+
   if (body.command === "tts") {
     const arg = encodeURIComponent(body.value ?? "");
     return doStub.fetch(new Request(`https://do/device/box/site/${arg}`));
