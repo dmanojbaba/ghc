@@ -1,3 +1,5 @@
+import { getChannelKey, DEVICE_ID } from "./devices";
+
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 const DO_VALUE_COMMANDS = new Set(["rewind", "ffwd", "sleep", "mute"]);
 
@@ -25,6 +27,19 @@ export async function handleCatt(request: Request, _env: Env, doStub: DurableObj
   if (body.command === "channel") {
     const arg = encodeURIComponent(body.value ?? "");
     return doStub.fetch(new Request(`https://do/device/box/channel/${arg}`));
+  }
+
+  if (body.command === "tts") {
+    const arg = encodeURIComponent(body.value ?? "");
+    return doStub.fetch(new Request(`https://do/device/box/site/${arg}`));
+  }
+
+  if (body.command === "cast") {
+    const val = body.value ?? "";
+    const channelKey = val && !val.startsWith("http") ? getChannelKey(DEVICE_ID, val) : null;
+    if (channelKey) {
+      return doStub.fetch(new Request(`https://do/device/box/channel/${encodeURIComponent(channelKey)}`));
+    }
   }
 
   return doStub.fetch(new Request("https://do/device/box/catt", {
