@@ -282,8 +282,8 @@ body {
   color: var(--text2);
 }
 
-.queue-list li:not(.empty-msg), .history-list li:not(.empty-msg) { padding-left: 1.4em; text-indent: -1.4em; }
-.queue-list li:not(.empty-msg)::before { content: attr(data-pos) ". "; font-weight: 600; color: var(--text); }
+.queue-list li:not(.empty-msg), .history-list li:not(.empty-msg) { padding-left: 1.4em; text-indent: -1.4em; display: flex; align-items: center; gap: 6px; }
+.queue-list li:not(.empty-msg)::before { content: "• "; }
 .history-list li:not(.empty-msg)::before { content: "• "; }
 
 .queue-list a, .history-list a {

@@ -185,7 +185,7 @@
         queueList.innerHTML = '<li class="empty-msg">Empty</li>';
       } else {
         queueList.innerHTML = queue.map(item =>
-          `<li data-pos="${item.position}"><a href="#" class="queue-jump-link" data-pos="${item.position}">${item.title ?? item.url}</a> <a href="${item.url}" target="_blank" rel="noopener" style="color:var(--text2);" title="Open in new tab">${extLinkIcon}</a></li>`
+          `<li><a href="#" class="queue-jump-link" data-pos="${item.position}">${item.title ?? item.url}</a><a href="${item.url}" target="_blank" rel="noopener" style="color:var(--text2); flex-shrink:0;" title="Open in new tab">${extLinkIcon}</a></li>`
         ).join('');
         queueList.querySelectorAll('.queue-jump-link').forEach(a => {
           a.addEventListener('click', e => {
@@ -202,7 +202,7 @@
         historyList.innerHTML = '<li class="empty-msg">No history</li>';
       } else {
         historyList.innerHTML = history.map(item =>
-          `<li><a href="#" data-url="${item.url}" class="history-play">${item.title ?? item.url}</a> <a href="${item.url}" target="_blank" rel="noopener" style="color:var(--text2);" title="Open in new tab">${extLinkIcon}</a></li>`
+          `<li><a href="#" data-url="${item.url}" class="history-play">${item.title ?? item.url}</a><a href="${item.url}" target="_blank" rel="noopener" style="color:var(--text2); flex-shrink:0;" title="Open in new tab">${extLinkIcon}</a></li>`
         ).join('');
         historyList.querySelectorAll('.history-play').forEach(a => {
           a.addEventListener('click', e => {
