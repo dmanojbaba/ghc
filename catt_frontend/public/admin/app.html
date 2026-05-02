@@ -202,7 +202,7 @@
         historyList.innerHTML = '<li class="empty-msg">No history</li>';
       } else {
         historyList.innerHTML = history.map(item =>
-          `<li><a href="#" data-url="${item.url}" class="history-play">${item.url}</a> <a href="${item.url}" target="_blank" rel="noopener" style="color:var(--text2);" title="Open in new tab">${extLinkIcon}</a></li>`
+          `<li><a href="#" data-url="${item.url}" class="history-play">${item.title ?? item.url}</a> <a href="${item.url}" target="_blank" rel="noopener" style="color:var(--text2);" title="Open in new tab">${extLinkIcon}</a></li>`
         ).join('');
         historyList.querySelectorAll('.history-play').forEach(a => {
           a.addEventListener('click', e => {

@@ -30,6 +30,7 @@ export class DeviceQueue implements DurableObject {
       CREATE TABLE IF NOT EXISTS history (
         position  INTEGER PRIMARY KEY AUTOINCREMENT,
         url       TEXT NOT NULL,
+        title     TEXT,
         played_at TEXT NOT NULL
       );
     `);
@@ -67,8 +68,8 @@ export class DeviceQueue implements DurableObject {
     return this.env.CATT_BACKEND_SECRET || undefined;
   }
 
-  private recordHistory(url: string): void {
-    this.sql.exec("INSERT INTO history (url, played_at) VALUES (?, ?)", url, new Date().toISOString());
+  private recordHistory(url: string, title?: string | null): void {
+    this.sql.exec("INSERT INTO history (url, title, played_at) VALUES (?, ?, ?)", url, title ?? null, new Date().toISOString());
     this.sql.exec(`
       DELETE FROM history WHERE position NOT IN (
         SELECT position FROM history ORDER BY position DESC LIMIT 10
@@ -119,7 +120,7 @@ export class DeviceQueue implements DurableObject {
       force_default: this.forceDefault(),
     }, this.secret);
     this.set("prev", row.url);
-    this.recordHistory(row.url);
+    this.recordHistory(row.url, row.title);
     this.set("session", "active");
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
   }
@@ -145,9 +146,10 @@ export class DeviceQueue implements DurableObject {
   async shuffle(playlistId: string, startVideoId?: string): Promise<void> {
     const device = resolveDevice(this.get("device"));
     let first: string;
+    let firstTitle: string | null;
     let rest: Array<{ url: string; title: string | null }>;
     try {
-      ({ first, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId, this.env.REDIRECT_URL, 50, startVideoId));
+      ({ first, firstTitle, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId, this.env.REDIRECT_URL, 50, startVideoId));
     } catch {
       this.set("session", DEFAULT_SESSION);
       await this.state.storage.deleteAlarm();
@@ -159,7 +161,7 @@ export class DeviceQueue implements DurableObject {
       this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", item.url, item.title, now);
     }
     this.set("prev", first);
-    this.recordHistory(first);
+    this.recordHistory(first, firstTitle);
     await castCommand(this.serverUrl, device, "cast", first, {
       force_default: this.forceDefault(),
     }, this.secret);
@@ -452,8 +454,8 @@ export class DeviceQueue implements DurableObject {
 
       case "history": {
         const rows = this.sql
-          .exec<{ position: number; url: string; played_at: string }>(
-            "SELECT position, url, played_at FROM history ORDER BY position DESC",
+          .exec<{ position: number; url: string; title: string | null; played_at: string }>(
+            "SELECT position, url, title, played_at FROM history ORDER BY position DESC",
           )
           .toArray();
         return new Response(JSON.stringify(rows, null, 2), {
