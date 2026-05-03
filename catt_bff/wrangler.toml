@@ -24,6 +24,9 @@ class_name = "DeviceQueue"
 tag = "v1"
 new_sqlite_classes = ["DeviceQueue"]
 
+[ai]
+binding = "CATT_AI"
+
 [triggers]
 crons = ["3 3 * * *"]
 
