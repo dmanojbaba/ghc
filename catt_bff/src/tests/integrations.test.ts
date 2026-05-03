@@ -630,6 +630,25 @@ describe("handleSlack — tts aliases", () => {
   });
 });
 
+describe("handleTelegram — playlist command", () => {
+  it("routes playlist to DO /shuffle", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("playlist", 111), env, stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/device/box/shuffle");
+  });
+
+  it("sets device before shuffle when device token is provided", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("playlist k", 111), env, stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
+    expect(calls[0]).toContain("/set/device/k");
+    expect(calls[1]).toContain("/device/box/shuffle");
+  });
+});
+
 describe("handleTelegram — AI fallback", () => {
   it("calls AI for unrecognised command and dispatches result", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));

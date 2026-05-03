@@ -100,6 +100,51 @@ describe("handleCatt — cast channel redirect", () => {
   });
 });
 
+describe("handleCatt — playlist command", () => {
+  it("routes playlist with no value to /device/box/shuffle", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "playlist" }), makeEnv(), stub);
+    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
+    expect(url).toContain("/device/box/shuffle");
+  });
+
+  it("sets device before shuffle when device is passed and no value", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "playlist", device: "k" }), makeEnv(), stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
+    expect(calls[0]).toContain("/set/device/k");
+    expect(calls[1]).toContain("/device/box/shuffle");
+  });
+
+  it("skips set/device when no device passed", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "playlist" }), makeEnv(), stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/device/box/shuffle");
+  });
+
+  it("routes playlist with value to /catt (cast) route", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "playlist", value: "https://www.youtube.com/playlist?list=PLabc" }), makeEnv(), stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const cattCall = calls.find((c: unknown[]) => (c[0] as Request).url.includes("/catt"));
+    expect(cattCall).toBeDefined();
+    const body = JSON.parse(await (cattCall![0] as Request).clone().text());
+    expect(body.command).toBe("cast");
+    expect(body.value).toBe("https://www.youtube.com/playlist?list=PLabc");
+  });
+
+  it("sets device then routes to /catt when both device and value passed", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "playlist", device: "k", value: "https://www.youtube.com/playlist?list=PLabc" }), makeEnv(), stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/set/device/k");
+    const cattCall = calls.find((c: unknown[]) => (c[0] as Request).url.includes("/catt"));
+    expect(cattCall).toBeDefined();
+  });
+});
+
 describe("handleCatt — stop command", () => {
   it("routes stop to /device/box/stop (not /off)", async () => {
     const stub = makeDoStub();

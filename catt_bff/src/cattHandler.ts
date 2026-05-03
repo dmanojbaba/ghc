@@ -29,6 +29,20 @@ export async function handleCatt(request: Request, _env: Env, doStub: DurableObj
     return doStub.fetch(new Request(`https://do/device/box/channel/${arg}`));
   }
 
+  if (body.command === "playlist") {
+    if (body.device) {
+      await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(body.device)}`));
+    }
+    if (body.value) {
+      return doStub.fetch(new Request("https://do/device/box/catt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ command: "cast", device: body.device ?? "", value: body.value }),
+      }));
+    }
+    return doStub.fetch(new Request("https://do/device/box/shuffle"));
+  }
+
   if (body.command === "jump") {
     const pos = encodeURIComponent(body.value ?? "");
     return doStub.fetch(new Request(`https://do/device/box/jump/${pos}`));

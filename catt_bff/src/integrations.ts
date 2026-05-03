@@ -22,6 +22,7 @@ sleep cancel          – cancel sleep timer
 channel up/down       – next/previous channel
 channel <name>        – switch to named channel
 device <key>          – set active device
+playlist              – replay active playlist from start
 state                 – show device state
 help                  – show this message`;
 
@@ -80,6 +81,19 @@ async function dispatchCommand(
     await doStub.fetch(new Request(`https://do/device/box/channel/${encodeURIComponent(arg)}`));
     return "channel";
   }
+  if (command === "playlist") {
+    if (device) await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(device)}`));
+    if (rawValue) {
+      await doStub.fetch(new Request("https://do/device/box/catt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ command: "cast", device, value: rawValue }),
+      }));
+    } else {
+      await doStub.fetch(new Request("https://do/device/box/shuffle"));
+    }
+    return "playlist";
+  }
   if (command === "mute") {
     const muted = (rawValue.trim() || "true") !== "false";
     await doStub.fetch(new Request(`https://do/device/box/mute/${muted}`));
@@ -100,7 +114,7 @@ async function dispatchCommand(
 
 const KNOWN_COMMANDS = new Set([
   "cast", "tts", "speak", "talk", "volume", "mute", "unmute", "play", "stop",
-  "clear", "reset", "prev", "next", "rewind", "ffwd", "sleep", "channel", "device", "state", "help",
+  "clear", "reset", "prev", "next", "rewind", "ffwd", "sleep", "channel", "device", "playlist", "state", "help",
 ]);
 
 type ParsedCommand = { command: string; device?: string; value?: string };
@@ -117,7 +131,7 @@ async function parseWithAI(text: string, env: Env): Promise<ParsedCommand | null
 Return ONLY valid JSON with this shape: {"command":"...","device":"...","value":"..."}
 device and value are optional strings.
 
-Valid commands: cast, tts, volume, mute, unmute, play, stop, clear, reset, prev, next, rewind, ffwd, sleep, channel, device, state, help
+Valid commands: cast, tts, volume, mute, unmute, play, stop, clear, reset, prev, next, rewind, ffwd, sleep, channel, device, playlist, state, help
 
 Valid device keys (use the key, not the name): ${devices}
 
@@ -133,6 +147,7 @@ Examples:
   "speak hello"                -> {"command":"tts","value":"hello"}
   "Radio Rahman"               -> {"command":"channel","value":"arr"}
   "Radio Lime"                 -> {"command":"channel","value":"lime"}
+  "replay my playlist"         -> {"command":"playlist"}
 
 If you cannot map the message to a valid command, return {"command":"unknown"}.`;
 
