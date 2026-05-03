@@ -303,7 +303,7 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
     const parsed = await parseWithAI(text, env);
     if (!parsed) {
       if (chatId && env.TELEGRAM_BOT_TOKEN) {
-        await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, "I didn't understand that");
+        await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, "Unknown command");
       }
       return Response.json({});
     }
@@ -312,8 +312,11 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
     }
     const dispatched = await dispatchCommand(parsed.command, parsed.device ?? "", parsed.value ?? "", env, doStub);
     if (chatId && env.TELEGRAM_BOT_TOKEN) {
-      const lines = [`${dispatched}: ${parsed.value ?? ""}`.trim()];
-      if (parsed.device) lines.push(`device: ${parsed.device}`);
+      const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
+      const state = await stateRes.json() as { device?: string };
+      const lines = [`command: ${dispatched}`];
+      if (parsed.value) lines.push(`value: ${parsed.value}`);
+      lines.push(`device: ${state.device ?? ""}`);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, lines.join("\n"));
     }
     return Response.json({});
