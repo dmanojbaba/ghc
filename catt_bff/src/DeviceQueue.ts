@@ -296,7 +296,7 @@ export class DeviceQueue implements DurableObject {
       channel:   this.get("channel"),
       prev:      this.get("prev"),
       next:      rows[0]?.url ?? DEFAULT_NEXT,
-      playlist:  this.get("playlist"),
+      playlist:  this.get("playlist") === DEFAULT_PLAYLIST ? "default" : this.get("playlist"),
       tts:       this.get("tts"),
       queue:     rows.map((r) => ({ position: r.position, url: r.url, title: r.title ?? null })),
     };
