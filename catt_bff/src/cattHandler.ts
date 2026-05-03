@@ -1,9 +1,10 @@
-import { getChannelKey, DEVICE_ID } from "./devices";
+import { getChannelKey, resolveDevice, DEVICE_ID } from "./devices";
+import { castCommand } from "./catt";
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 const DO_VALUE_COMMANDS = new Set(["rewind", "ffwd", "sleep", "mute"]);
 
-export async function handleCatt(request: Request, _env: Env, doStub: DurableObjectStub): Promise<Response> {
+export async function handleCatt(request: Request, env: Env, doStub: DurableObjectStub): Promise<Response> {
   const body = await request.json() as { command?: string; value?: string; device?: string };
   if (!body.command) return new Response("'command' is required", { status: 400 });
 
@@ -43,6 +44,21 @@ export async function handleCatt(request: Request, _env: Env, doStub: DurableObj
     return doStub.fetch(new Request("https://do/device/box/shuffle"));
   }
 
+  if (body.command === "volume") {
+    const val = body.value ?? "";
+    const device = resolveDevice(body.device ?? "");
+    if (val === "up" || val === "down") {
+      await castCommand(env.CATT_BACKEND_URL, device, `volume${val}`, undefined, undefined, env.CATT_BACKEND_SECRET);
+    } else {
+      await castCommand(env.CATT_BACKEND_URL, device, "volume", Number(val), undefined, env.CATT_BACKEND_SECRET);
+    }
+    return new Response("ok");
+  }
+
+  if (body.command === "state") {
+    return doStub.fetch(new Request("https://do/device/box/state"));
+  }
+
   if (body.command === "history") {
     return doStub.fetch(new Request("https://do/device/box/history"));
   }
@@ -52,7 +68,7 @@ export async function handleCatt(request: Request, _env: Env, doStub: DurableObj
     return doStub.fetch(new Request(`https://do/device/box/jump/${pos}`));
   }
 
-  if (body.command === "tts") {
+  if (body.command === "tts" || body.command === "speak" || body.command === "talk") {
     const arg = encodeURIComponent(body.value ?? "");
     return doStub.fetch(new Request(`https://do/device/box/site/${arg}`));
   }

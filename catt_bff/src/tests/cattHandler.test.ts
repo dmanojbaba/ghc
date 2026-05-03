@@ -28,7 +28,10 @@ function makeRequest(body: Record<string, unknown>) {
   });
 }
 
-beforeEach(() => vi.restoreAllMocks());
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+  vi.restoreAllMocks();
+});
 
 describe("handleCatt — jump command", () => {
   it("routes jump to /device/box/jump/:position", async () => {
@@ -43,6 +46,22 @@ describe("handleCatt — tts command", () => {
   it("routes tts to /device/box/site/:value", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "tts", value: "hello world" }), makeEnv(), stub);
+    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
+    expect(url).toContain("/device/box/site/");
+    expect(decodeURIComponent(url)).toContain("hello world");
+  });
+
+  it("routes speak to /device/box/site/:value", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "speak", value: "hello world" }), makeEnv(), stub);
+    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
+    expect(url).toContain("/device/box/site/");
+    expect(decodeURIComponent(url)).toContain("hello world");
+  });
+
+  it("routes talk to /device/box/site/:value", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "talk", value: "hello world" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
     expect(url).toContain("/device/box/site/");
     expect(decodeURIComponent(url)).toContain("hello world");
@@ -145,12 +164,50 @@ describe("handleCatt — playlist command", () => {
   });
 });
 
+describe("handleCatt — state command", () => {
+  it("routes state to /device/box/state", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "state" }), makeEnv(), stub);
+    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
+    expect(url).toContain("/device/box/state");
+  });
+});
+
 describe("handleCatt — history command", () => {
   it("routes history to /device/box/history", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "history" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
     expect(url).toContain("/device/box/history");
+  });
+});
+
+describe("handleCatt — volume command", () => {
+  it("calls catt_backend volumeup for value=up", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "volume", value: "up" }), makeEnv(), stub);
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[0]).toContain("https://catt.example.com");
+    const body = JSON.parse(call[1].body);
+    expect(body.command).toBe("volumeup");
+    expect(stub.fetch).not.toHaveBeenCalled();
+  });
+
+  it("calls catt_backend volumedown for value=down", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "volume", value: "down" }), makeEnv(), stub);
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.command).toBe("volumedown");
+  });
+
+  it("calls catt_backend volume with numeric level", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "volume", value: "50" }), makeEnv(), stub);
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.command).toBe("volume");
+    expect(body.value).toBe(50);
   });
 });
 
