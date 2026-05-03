@@ -100,6 +100,16 @@ describe("handleCatt — cast channel redirect", () => {
   });
 });
 
+describe("handleCatt — stop command", () => {
+  it("routes stop to /device/box/stop (not /off)", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "stop" }), makeEnv(), stub);
+    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
+    expect(url).toContain("/device/box/stop");
+    expect(url).not.toContain("/off");
+  });
+});
+
 describe("handleCatt — app command", () => {
   it("routes app command to /device/box/set/app/:key", async () => {
     const stub = makeDoStub();

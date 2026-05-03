@@ -108,7 +108,7 @@ async function handleExecute(
               },
             };
           } else {
-            await doGet(stub, "/stop");
+            await doGet(stub, "/off");
             result = { status: "SUCCESS", states: { on: false, online: true, playbackState: "STOPPED" } };
           }
 

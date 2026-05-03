@@ -137,6 +137,14 @@ export class DeviceQueue implements DurableObject {
     this.set("tts",     DEFAULT_TTS);
   }
 
+  private async stopDevice(): Promise<void> {
+    const device = resolveDevice(this.get("device"));
+    await castCommand(this.serverUrl, device, "stop", undefined, undefined, this.secret);
+    this.set("session", DEFAULT_SESSION);
+    this.set("sleep_at", DEFAULT_SLEEP_AT);
+    await this.state.storage.deleteAlarm();
+  }
+
   async stopAndClearState(): Promise<void> {
     const device = resolveDevice(this.get("device"));
     await castCommand(this.serverUrl, device, "stop", undefined, undefined, this.secret);
@@ -323,6 +331,10 @@ export class DeviceQueue implements DurableObject {
       }
 
       case "stop":
+        await this.stopDevice();
+        return new Response("ok");
+
+      case "off":
         await this.stopAndClearState();
         return new Response("ok");
 
