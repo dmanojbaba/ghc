@@ -25,6 +25,8 @@ export interface CattInfoResponse {
   };
 }
 
+const FETCH_TIMEOUT_MS = 50_000;
+
 function cattHeaders(secret?: string): Record<string, string> {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (secret) headers["X-Catt-Secret"] = secret;
@@ -47,6 +49,7 @@ export async function castCommand(
     method: "POST",
     headers: cattHeaders(secret),
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!res.ok) throw new Error(`catt_backend error: ${res.status}`);
@@ -58,6 +61,7 @@ export async function getStatus(serverUrl: string, device: string, secret?: stri
     method: "POST",
     headers: cattHeaders(secret),
     body: JSON.stringify({ device, command: "status" }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!res.ok) throw new Error(`catt_backend error: ${res.status}`);
@@ -69,6 +73,7 @@ export async function getInfo(serverUrl: string, device: string, secret?: string
     method: "POST",
     headers: cattHeaders(secret),
     body: JSON.stringify({ device, command: "info" }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!res.ok) throw new Error(`catt_backend error: ${res.status}`);

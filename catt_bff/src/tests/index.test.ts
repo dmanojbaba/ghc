@@ -6,6 +6,7 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
     CATT_API_KEY: "secret-key",
     CATT_BACKEND_SECRET: "server-secret",
     CATT_BACKEND_URL: "https://catt.example.com",
+    CATT_AI: {} as Ai,
     SLACK_SIGNING_SECRET: "slack-secret",
     TELEGRAM_ALLOWED_CHAT_IDS: "",
     TELEGRAM_BOT_TOKEN: "",

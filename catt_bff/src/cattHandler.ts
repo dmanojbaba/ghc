@@ -7,6 +7,15 @@ const DO_VALUE_COMMANDS = new Set(["rewind", "ffwd", "sleep", "mute"]);
 export async function handleCatt(request: Request, env: Env, doStub: DurableObjectStub): Promise<Response> {
   const body = await request.json() as { command?: string; value?: string; device?: string };
   if (!body.command) return new Response("'command' is required", { status: 400 });
+  try {
+    return await handleCattInner(body as { command: string; value?: string; device?: string }, env, doStub);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Command failed";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+async function handleCattInner(body: { command: string; value?: string; device?: string }, env: Env, doStub: DurableObjectStub): Promise<Response> {
 
   if (DO_COMMANDS.has(body.command)) {
     return doStub.fetch(new Request(`https://do/device/box/${body.command}`));

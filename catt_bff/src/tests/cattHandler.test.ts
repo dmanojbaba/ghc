@@ -10,6 +10,7 @@ function makeEnv(): Env {
     CATT_API_KEY: "api-key",
     CATT_BACKEND_SECRET: "server-secret",
     CATT_BACKEND_URL: "https://catt.example.com",
+    CATT_AI: {} as Ai,
     SLACK_SIGNING_SECRET: "",
     TELEGRAM_ALLOWED_CHAT_IDS: "",
     TELEGRAM_BOT_TOKEN: "",
@@ -254,5 +255,17 @@ describe("handleCatt — app command", () => {
     await handleCatt(makeRequest({ command: "app", value: "default" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
     expect(url).toContain("/set/app/default");
+  });
+});
+
+describe("handleCatt — error handling", () => {
+  it("returns 500 JSON when command throws", async () => {
+    const stub = {
+      fetch: vi.fn(async () => { throw new Error("backend unavailable"); }),
+    } as unknown as DurableObjectStub;
+    const res = await handleCatt(makeRequest({ command: "play" }), makeEnv(), stub);
+    expect(res.status).toBe(500);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain("backend unavailable");
   });
 });

@@ -9,6 +9,9 @@
 <body>
   <div class="app-wrap" id="app">
 
+    <!-- Error toast -->
+    <div id="error-toast" style="display:none; background:#ef4444; color:#fff; font-size:0.85rem; padding:8px 14px; border-radius:var(--radius); margin-bottom:8px;"></div>
+
     <!-- Device bar -->
     <div class="section" id="device-section">
       <div class="device-bar" id="device-bar">
@@ -64,6 +67,15 @@
 
     // ── helpers ──────────────────────────────────────────────────────
 
+    let errorTimer = null;
+    function showError(msg) {
+      const toast = document.getElementById('error-toast');
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      if (errorTimer) clearTimeout(errorTimer);
+      errorTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+
     async function postCommand(body) {
       const res = await fetch('/api/command', {
         method: 'POST',
@@ -71,6 +83,7 @@
         body: JSON.stringify(body),
       });
       if (res.status === 401) window.location.href = '/';
+      if (!res.ok) throw new Error('Backend error');
       return res;
     }
 
@@ -86,7 +99,7 @@
       };
       // re-enable after 500ms minimum even on fast responses
       const timer = setTimeout(done, 500);
-      fn().then(() => { clearTimeout(timer); done(); }).catch(() => { clearTimeout(timer); done(); });
+      fn().then(() => { clearTimeout(timer); done(); }).catch((err) => { clearTimeout(timer); done(); showError(err?.message ?? 'Backend error'); });
     }
 
     // ── device bar ───────────────────────────────────────────────────

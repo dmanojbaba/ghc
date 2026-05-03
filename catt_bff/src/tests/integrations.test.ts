@@ -913,4 +913,31 @@ describe("handleTelegram — AI fallback", () => {
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
     expect(calls.every(u => !u.includes("/set/device/notadevice"))).toBe(true);
   });
+
+  it("sends 'Backend error' when dispatchCommand throws (AI path)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const ai = makeAi(JSON.stringify({ command: "cast", value: "jazz" }));
+    const env = makeEnv({ CATT_AI: ai });
+    const stub = {
+      fetch: vi.fn(async () => { throw new Error("backend unavailable"); }),
+    } as unknown as DurableObjectStub;
+    await handleTelegram(makeTelegramRequest("put on some jazz", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toBe("Backend error");
+  });
+});
+
+describe("handleTelegram — error handling", () => {
+  it("sends 'Backend error' when dispatchCommand throws (known command path)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const env = makeEnv();
+    const stub = {
+      fetch: vi.fn(async () => { throw new Error("backend unavailable"); }),
+    } as unknown as DurableObjectStub;
+    await handleTelegram(makeTelegramRequest("volume up", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toBe("Backend error");
+  });
 });

@@ -20,6 +20,9 @@
       </div>
     </div>
 
+    <!-- Error toast -->
+    <div id="error-toast" style="display:none; background:#ef4444; color:#fff; font-size:0.85rem; padding:8px 14px; border-radius:var(--radius); margin-bottom:8px;"></div>
+
     <!-- Device + App -->
     <div class="section">
       <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -120,6 +123,15 @@
 
     // ── helpers ──────────────────────────────────────────────────────
 
+    let errorTimer = null;
+    function showError(msg = 'Command failed') {
+      const toast = document.getElementById('error-toast');
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      if (errorTimer) clearTimeout(errorTimer);
+      errorTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+
     async function postCommand(body) {
       const res = await fetch('/api/admin/command', {
         method: 'POST',
@@ -127,6 +139,7 @@
         body: JSON.stringify(body),
       });
       if (res.status === 401) window.location.href = '/admin';
+      if (!res.ok) throw new Error('Backend error');
       return res;
     }
 
@@ -139,7 +152,7 @@
       };
       const timer = setTimeout(done, 500);
       fn().then(() => { clearTimeout(timer); done(); refreshState(); })
-          .catch(() => { clearTimeout(timer); done(); });
+          .catch((err) => { clearTimeout(timer); done(); showError(err?.message); });
     }
 
     // ── state rendering ───────────────────────────────────────────────

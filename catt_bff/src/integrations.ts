@@ -334,24 +334,35 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
     if (parsed.device && parsed.device in INPUT_TO_DEVICE) {
       await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(parsed.device)}`));
     }
-    const dispatched = await dispatchCommand(parsed.command, parsed.device ?? "", parsed.value ?? "", env, doStub);
-    if (chatId && env.TELEGRAM_BOT_TOKEN) {
-      const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
-      const state = await stateRes.json() as { device?: string };
-      const lines = [`command: ${dispatched}`];
-      if (parsed.value) lines.push(`value: ${parsed.value}`);
-      lines.push(`device: ${state.device ?? ""}`);
-      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, lines.join("\n"));
+    try {
+      const dispatched = await dispatchCommand(parsed.command, parsed.device ?? "", parsed.value ?? "", env, doStub);
+      if (chatId && env.TELEGRAM_BOT_TOKEN) {
+        const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
+        const state = await stateRes.json() as { device?: string };
+        const lines = [`command: ${dispatched}`];
+        if (parsed.value) lines.push(`value: ${parsed.value}`);
+        lines.push(`device: ${state.device ?? ""}`);
+        await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, lines.join("\n"));
+      }
+    } catch {
+      if (chatId && env.TELEGRAM_BOT_TOKEN) {
+        await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, "Backend error");
+      }
     }
     return Response.json({});
   }
 
-  await dispatchCommand(command, device, rawValue, env, doStub);
-
-  if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset" || command === "device")) {
-    const res  = await doStub.fetch(new Request("https://do/device/box/state"));
-    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
-    await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
+  try {
+    await dispatchCommand(command, device, rawValue, env, doStub);
+    if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset" || command === "device")) {
+      const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+      const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
+    }
+  } catch {
+    if (chatId && env.TELEGRAM_BOT_TOKEN) {
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, "Backend error");
+    }
   }
 
   return Response.json({});
