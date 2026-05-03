@@ -1,5 +1,5 @@
 import { castCommand } from "./catt";
-import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, DEVICE_ID } from "./devices";
+import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, getDeviceList, getChannelListWithSynonyms, DEVICE_ID } from "./devices";
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 
@@ -96,6 +96,61 @@ async function dispatchCommand(
     body: JSON.stringify({ command: "cast", device, value: val }),
   }));
   return "cast";
+}
+
+const KNOWN_COMMANDS = new Set([
+  "cast", "tts", "speak", "talk", "volume", "mute", "unmute", "play", "stop",
+  "clear", "reset", "prev", "next", "rewind", "ffwd", "sleep", "channel", "device", "state", "help",
+]);
+
+type ParsedCommand = { command: string; device?: string; value?: string };
+
+async function parseWithAI(text: string, env: Env): Promise<ParsedCommand | null> {
+  if (!env.CATT_AI) return null;
+
+  const devices = getDeviceList(DEVICE_ID).map((d) => `${d.key}=${d.name}`).join(", ");
+  const channels = getChannelListWithSynonyms(DEVICE_ID)
+    .map((c) => `${c.key}=${c.names.join("|")}`)
+    .join(", ");
+
+  const systemPrompt = `You are a command parser for a Chromecast controller.
+Return ONLY valid JSON with this shape: {"command":"...","device":"...","value":"..."}
+device and value are optional strings.
+
+Valid commands: cast, tts, volume, mute, unmute, play, stop, clear, reset, prev, next, rewind, ffwd, sleep, channel, device, state, help
+
+Valid device keys (use the key, not the name): ${devices}
+
+Valid channel keys and all their names (use the key as value): ${channels}
+
+Examples:
+  "put on some jazz"            -> {"command":"cast","value":"jazz music"}
+  "set kitchen volume to 50"   -> {"command":"volume","device":"k","value":"50"}
+  "put kitchen on"             -> {"command":"device","value":"k"}
+  "turn off in 20 minutes"     -> {"command":"sleep","value":"20"}
+  "louder"                     -> {"command":"volume","value":"up"}
+  "switch to the news channel" -> {"command":"channel","value":"news"}
+  "speak hello"                -> {"command":"tts","value":"hello"}
+  "Radio Rahman"               -> {"command":"channel","value":"arr"}
+  "Radio Lime"                 -> {"command":"channel","value":"lime"}
+
+If you cannot map the message to a valid command, return {"command":"unknown"}.`;
+
+  try {
+    const result = await env.CATT_AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: text },
+      ],
+    }) as { response?: string };
+
+    const raw = result.response?.trim() ?? "";
+    const parsed = JSON.parse(raw) as ParsedCommand;
+    if (!parsed.command || parsed.command === "unknown" || !KNOWN_COMMANDS.has(parsed.command)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 async function verifySlackSignature(request: Request, env: Env, body: string): Promise<boolean> {
@@ -228,6 +283,22 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
   }
 
   const { device, rawValue } = parseTokens(rest);
+
+  if (!KNOWN_COMMANDS.has(command)) {
+    const parsed = await parseWithAI(text, env);
+    if (!parsed) {
+      if (chatId && env.TELEGRAM_BOT_TOKEN) {
+        await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, "I didn't understand that");
+      }
+      return Response.json({});
+    }
+    const dispatched = await dispatchCommand(parsed.command, parsed.device ?? "", parsed.value ?? "", env, doStub);
+    if (chatId && env.TELEGRAM_BOT_TOKEN) {
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, `${dispatched}: ${parsed.value ?? ""}`.trim());
+    }
+    return Response.json({});
+  }
+
   await dispatchCommand(command, device, rawValue, env, doStub);
 
   if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset" || command === "device")) {

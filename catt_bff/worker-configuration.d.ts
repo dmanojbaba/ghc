@@ -2,6 +2,7 @@ interface Env {
   CATT_API_KEY: string;
   CATT_BACKEND_SECRET: string;
   CATT_BACKEND_URL: string;
+  CATT_AI: Ai;
   DEVICE_QUEUE: DurableObjectNamespace;
   SLACK_SIGNING_SECRET: string;
   TELEGRAM_BOT_TOKEN: string;

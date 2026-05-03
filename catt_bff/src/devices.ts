@@ -313,6 +313,22 @@ export function getChannelList(deviceId: string): Array<{ key: string; name: str
   return [];
 }
 
+export function getChannelListWithSynonyms(deviceId: string): Array<{ key: string; names: string[] }> {
+  for (const d of DEVICES) {
+    if (d.id !== deviceId) continue;
+    const channels = d.attributes.availableChannels as Array<{
+      key: string;
+      names: string[];
+      number: string;
+    }>;
+    return channels
+      .slice()
+      .sort((a, b) => Number(a.number) - Number(b.number))
+      .map((c) => ({ key: c.key, names: c.names }));
+  }
+  return [];
+}
+
 export function getChannelCode(
   deviceId: string,
   channelNumber: string,
