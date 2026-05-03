@@ -292,9 +292,14 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
       }
       return Response.json({});
     }
+    if (parsed.device && parsed.device in INPUT_TO_DEVICE) {
+      await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(parsed.device)}`));
+    }
     const dispatched = await dispatchCommand(parsed.command, parsed.device ?? "", parsed.value ?? "", env, doStub);
     if (chatId && env.TELEGRAM_BOT_TOKEN) {
-      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, `${dispatched}: ${parsed.value ?? ""}`.trim());
+      const lines = [`${dispatched}: ${parsed.value ?? ""}`.trim()];
+      if (parsed.device) lines.push(`device: ${parsed.device}`);
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, lines.join("\n"));
     }
     return Response.json({});
   }

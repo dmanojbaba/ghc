@@ -656,6 +656,21 @@ describe("handleTelegram — AI fallback", () => {
     expect(ai.run).toHaveBeenCalledOnce();
   });
 
+  it("sets device in KV before dispatching when AI returns a device", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const ai = makeAi(JSON.stringify({ command: "channel", device: "o", value: "lime" }));
+    const env = makeEnv({ CATT_AI: ai });
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("Radio Lime on mini office", 111), env, stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
+    const deviceSetCall = calls.find(u => u.includes("/set/device/o"));
+    const channelCall = calls.find(u => u.includes("/channel/lime"));
+    expect(deviceSetCall).toBeDefined();
+    expect(channelCall).toBeDefined();
+    // device must be set before channel is dispatched
+    expect(calls.indexOf(deviceSetCall!)).toBeLessThan(calls.indexOf(channelCall!));
+  });
+
   it("sends 'I didn't understand that' when AI returns unknown command", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi(JSON.stringify({ command: "unknown" }));
@@ -710,5 +725,38 @@ describe("handleTelegram — AI fallback", () => {
     expect(prompt).toContain("arr=Radio ARR|Radio Rahman");
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.some((c: unknown[]) => (c[0] as Request).url.includes("/channel/arr"))).toBe(true);
+  });
+
+  it("sends confirmation with command and value on success (no device)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const ai = makeAi(JSON.stringify({ command: "cast", value: "jazz music" }));
+    const env = makeEnv({ CATT_AI: ai });
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("put on some jazz", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toContain("cast: jazz music");
+    expect(body.text).not.toContain("device:");
+  });
+
+  it("sends confirmation with command, value, and device on next line when device present", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const ai = makeAi(JSON.stringify({ command: "channel", device: "o", value: "lime" }));
+    const env = makeEnv({ CATT_AI: ai });
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("Radio Lime on mini office", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toBe("channel: lime\ndevice: o");
+  });
+
+  it("does not set device in KV when AI returns unknown device key", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const ai = makeAi(JSON.stringify({ command: "cast", device: "notadevice", value: "jazz" }));
+    const env = makeEnv({ CATT_AI: ai });
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("play jazz on notadevice", 111), env, stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
+    expect(calls.every(u => !u.includes("/set/device/notadevice"))).toBe(true);
   });
 });
