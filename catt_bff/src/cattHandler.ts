@@ -46,7 +46,13 @@ export async function handleCatt(request: Request, env: Env, doStub: DurableObje
 
   if (body.command === "volume") {
     const val = body.value ?? "";
-    const device = resolveDevice(body.device ?? "");
+    let deviceKey = body.device ?? "";
+    if (!deviceKey) {
+      const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
+      const state = await stateRes.json() as { device?: string };
+      deviceKey = state.device ?? "";
+    }
+    const device = resolveDevice(deviceKey);
     if (val === "up" || val === "down") {
       await castCommand(env.CATT_BACKEND_URL, device, `volume${val}`, undefined, undefined, env.CATT_BACKEND_SECRET);
     } else {

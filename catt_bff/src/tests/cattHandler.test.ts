@@ -182,32 +182,52 @@ describe("handleCatt — history command", () => {
   });
 });
 
+function makeStateStub(device: string): DurableObjectStub {
+  return {
+    fetch: vi.fn(async (req: Request) => {
+      if (req.url.includes("/state")) return new Response(JSON.stringify({ device }));
+      return new Response("ok");
+    }),
+  } as unknown as DurableObjectStub;
+}
+
 describe("handleCatt — volume command", () => {
-  it("calls catt_backend volumeup for value=up", async () => {
-    const stub = makeDoStub();
+  it("calls catt_backend volumeup for value=up using active device from state", async () => {
+    const stub = makeStateStub("o");
     await handleCatt(makeRequest({ command: "volume", value: "up" }), makeEnv(), stub);
     const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(call[0]).toContain("https://catt.example.com");
     const body = JSON.parse(call[1].body);
     expect(body.command).toBe("volumeup");
-    expect(stub.fetch).not.toHaveBeenCalled();
+    expect(body.device).toBe("Mini Office");
   });
 
-  it("calls catt_backend volumedown for value=down", async () => {
-    const stub = makeDoStub();
+  it("calls catt_backend volumedown for value=down using active device from state", async () => {
+    const stub = makeStateStub("o");
     await handleCatt(makeRequest({ command: "volume", value: "down" }), makeEnv(), stub);
     const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(call[1].body);
     expect(body.command).toBe("volumedown");
+    expect(body.device).toBe("Mini Office");
   });
 
-  it("calls catt_backend volume with numeric level", async () => {
-    const stub = makeDoStub();
+  it("calls catt_backend volume with numeric level using active device from state", async () => {
+    const stub = makeStateStub("o");
     await handleCatt(makeRequest({ command: "volume", value: "50" }), makeEnv(), stub);
     const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(call[1].body);
     expect(body.command).toBe("volume");
     expect(body.value).toBe(50);
+    expect(body.device).toBe("Mini Office");
+  });
+
+  it("uses device from request body when provided", async () => {
+    const stub = makeStateStub("o");
+    await handleCatt(makeRequest({ command: "volume", value: "up", device: "k" }), makeEnv(), stub);
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.device).toBe("Mini Kitchen");
+    expect(stub.fetch).not.toHaveBeenCalled();
   });
 });
 

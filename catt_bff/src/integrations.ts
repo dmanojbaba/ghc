@@ -64,11 +64,17 @@ async function dispatchCommand(
   }
   if (command === "volume") {
     const val = rawValue.trim();
+    let deviceKey = device;
+    if (!deviceKey) {
+      const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
+      const state = await stateRes.json() as { device?: string };
+      deviceKey = state.device ?? "";
+    }
+    const resolvedDevice = resolveDevice(deviceKey);
     if (val === "up" || val === "down") {
-      const device_ = resolveDevice(device);
-      await castCommand(env.CATT_BACKEND_URL, device_, `volume${val}`, undefined, undefined, env.CATT_BACKEND_SECRET);
+      await castCommand(env.CATT_BACKEND_URL, resolvedDevice, `volume${val}`, undefined, undefined, env.CATT_BACKEND_SECRET);
     } else {
-      await castCommand(env.CATT_BACKEND_URL, resolveDevice(device), "volume", Number(val), undefined, env.CATT_BACKEND_SECRET);
+      await castCommand(env.CATT_BACKEND_URL, resolvedDevice, "volume", Number(val), undefined, env.CATT_BACKEND_SECRET);
     }
     return "volume";
   }

@@ -703,6 +703,41 @@ describe("handleSlack — tts aliases", () => {
   });
 });
 
+describe("handleSlack — volume command", () => {
+  it("fetches active device from state when no device token given", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const env = makeEnv();
+    const ctx = makeCtx();
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "o" }));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const request = await makeSlackRequest("volume up", env);
+    await handleSlack(request, env, ctx, stub);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.command).toBe("volumeup");
+    expect(body.device).toBe("Mini Office");
+  });
+
+  it("uses parsed device token when given", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const env = makeEnv();
+    const ctx = makeCtx();
+    const stub = makeDoStub();
+    const request = await makeSlackRequest("volume k 50", env);
+    await handleSlack(request, env, ctx, stub);
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.command).toBe("volume");
+    expect(body.device).toBe("Mini Kitchen");
+  });
+});
+
 describe("handleTelegram — playlist command", () => {
   it("routes playlist to DO /shuffle", async () => {
     const env = makeEnv();
