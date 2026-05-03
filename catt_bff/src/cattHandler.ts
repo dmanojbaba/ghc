@@ -43,6 +43,10 @@ export async function handleCatt(request: Request, _env: Env, doStub: DurableObj
     return doStub.fetch(new Request("https://do/device/box/shuffle"));
   }
 
+  if (body.command === "history") {
+    return doStub.fetch(new Request("https://do/device/box/history"));
+  }
+
   if (body.command === "jump") {
     const pos = encodeURIComponent(body.value ?? "");
     return doStub.fetch(new Request(`https://do/device/box/jump/${pos}`));

@@ -24,6 +24,7 @@ channel <name>        – switch to named channel
 device <key>          – set active device
 playlist              – replay active playlist from start
 state                 – show device state
+history               – show playback history
 help                  – show this message`;
 
 function parseTokens(tokens: string[]): { device: string; rawValue: string } {
@@ -114,7 +115,7 @@ async function dispatchCommand(
 
 const KNOWN_COMMANDS = new Set([
   "cast", "tts", "speak", "talk", "volume", "mute", "unmute", "play", "stop",
-  "clear", "reset", "prev", "next", "rewind", "ffwd", "sleep", "channel", "device", "playlist", "state", "help",
+  "clear", "reset", "prev", "next", "rewind", "ffwd", "sleep", "channel", "device", "playlist", "state", "history", "help",
 ]);
 
 type ParsedCommand = { command: string; device?: string; value?: string };
@@ -209,6 +210,12 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
+  if (command === "history") {
+    const res   = await doStub.fetch(new Request("https://do/device/box/history"));
+    const items = truncateHistory(await res.json() as unknown[]);
+    return new Response("```\n" + JSON.stringify(items, null, 2) + "\n```", { status: 200 });
+  }
+
   if (command in INPUT_TO_DEVICE) {
     await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(command)}`));
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
@@ -240,6 +247,11 @@ function truncateStateQueue(json: Record<string, unknown>): Record<string, unkno
     return { ...json, queue: [...json.queue.slice(0, 5), `… ${json.queue.length - 5} more`] };
   }
   return json;
+}
+
+function truncateHistory(items: unknown[]): unknown[] {
+  if (items.length > 5) return [...items.slice(0, 5), `… ${items.length - 5} more`];
+  return items;
 }
 
 function escapeHtml(text: string): string {
@@ -283,6 +295,12 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
       const res   = await doStub.fetch(new Request("https://do/device/box/state"));
       const json  = truncateStateQueue(await res.json() as Record<string, unknown>);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
+      return Response.json({});
+    }
+    if (command === "history") {
+      const res   = await doStub.fetch(new Request("https://do/device/box/history"));
+      const items = truncateHistory(await res.json() as unknown[]);
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(items, null, 2), true);
       return Response.json({});
     }
   }

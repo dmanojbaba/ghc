@@ -460,6 +460,79 @@ describe("handleSlack — clear and reset commands", () => {
   });
 });
 
+describe("handleTelegram — history command", () => {
+  it("sends history JSON as pre-formatted message", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const history = [{ url: "https://youtu.be/abc", title: "Song", played_at: "2026-05-03T10:00:00Z" }];
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/history")) return new Response(JSON.stringify(history));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const env = makeEnv();
+    await handleTelegram(makeTelegramRequest("history", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toContain("youtu.be/abc");
+    expect(body.parse_mode).toBe("HTML");
+  });
+
+  it("truncates history to 5 items with a count suffix", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const history = Array.from({ length: 8 }, (_, i) => ({ url: `https://youtu.be/${i}`, title: `Song ${i}` }));
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/history")) return new Response(JSON.stringify(history));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const env = makeEnv();
+    await handleTelegram(makeTelegramRequest("history", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    const items = JSON.parse(body.text.replace(/<\/?pre>/g, ""));
+    expect(items).toHaveLength(6);
+    expect(items[5]).toBe("… 3 more");
+  });
+});
+
+describe("handleSlack — history command", () => {
+  it("returns history JSON as pre-formatted response", async () => {
+    const env = makeEnv();
+    const history = [{ url: "https://youtu.be/abc", title: "Song", played_at: "2026-05-03T10:00:00Z" }];
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/history")) return new Response(JSON.stringify(history));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const request = await makeSlackRequest("history", env);
+    const res = await handleSlack(request, env, makeCtx(), stub);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("youtu.be/abc");
+    expect(text).toContain("```");
+  });
+
+  it("truncates history to 5 items with a count suffix", async () => {
+    const env = makeEnv();
+    const history = Array.from({ length: 8 }, (_, i) => ({ url: `https://youtu.be/${i}`, title: `Song ${i}` }));
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/history")) return new Response(JSON.stringify(history));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    const request = await makeSlackRequest("history", env);
+    const res = await handleSlack(request, env, makeCtx(), stub);
+    const text = await res.text();
+    const items = JSON.parse(text.replace(/```\n?/g, ""));
+    expect(items).toHaveLength(6);
+    expect(items[5]).toBe("… 3 more");
+  });
+});
+
 describe("handleTelegram — device sends state reply", () => {
   it("sends state after device command", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));

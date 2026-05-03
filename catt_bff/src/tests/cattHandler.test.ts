@@ -145,6 +145,15 @@ describe("handleCatt — playlist command", () => {
   });
 });
 
+describe("handleCatt — history command", () => {
+  it("routes history to /device/box/history", async () => {
+    const stub = makeDoStub();
+    await handleCatt(makeRequest({ command: "history" }), makeEnv(), stub);
+    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
+    expect(url).toContain("/device/box/history");
+  });
+});
+
 describe("handleCatt — stop command", () => {
   it("routes stop to /device/box/stop (not /off)", async () => {
     const stub = makeDoStub();
