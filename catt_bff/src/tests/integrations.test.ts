@@ -698,4 +698,17 @@ describe("handleTelegram — AI fallback", () => {
     await handleTelegram(makeTelegramRequest("cast jazz", 111), env, stub);
     expect(ai.run).not.toHaveBeenCalled();
   });
+
+  it("AI system prompt includes channel synonyms", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const ai = makeAi(JSON.stringify({ command: "channel", value: "arr" }));
+    const env = makeEnv({ CATT_AI: ai });
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("Radio Rahman", 111), env, stub);
+    expect(ai.run).toHaveBeenCalledOnce();
+    const prompt = (ai.run as ReturnType<typeof vi.fn>).mock.calls[0][1].messages[0].content as string;
+    expect(prompt).toContain("arr=Radio ARR|Radio Rahman");
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((c: unknown[]) => (c[0] as Request).url.includes("/channel/arr"))).toBe(true);
+  });
 });

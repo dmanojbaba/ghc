@@ -1,5 +1,5 @@
 import { castCommand } from "./catt";
-import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, getDeviceList, getChannelList, DEVICE_ID } from "./devices";
+import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, getDeviceList, getChannelListWithSynonyms, DEVICE_ID } from "./devices";
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 
@@ -109,7 +109,9 @@ async function parseWithAI(text: string, env: Env): Promise<ParsedCommand | null
   if (!env.CATT_AI) return null;
 
   const devices = getDeviceList(DEVICE_ID).map((d) => `${d.key}=${d.name}`).join(", ");
-  const channels = getChannelList(DEVICE_ID).map((c) => c.key).join(", ");
+  const channels = getChannelListWithSynonyms(DEVICE_ID)
+    .map((c) => `${c.key}=${c.names.join("|")}`)
+    .join(", ");
 
   const systemPrompt = `You are a command parser for a Chromecast controller.
 Return ONLY valid JSON with this shape: {"command":"...","device":"...","value":"..."}
@@ -119,16 +121,18 @@ Valid commands: cast, tts, volume, mute, unmute, play, stop, clear, reset, prev,
 
 Valid device keys (use the key, not the name): ${devices}
 
-Valid channel keys: ${channels}
+Valid channel keys and all their names (use the key as value): ${channels}
 
 Examples:
-  "play some jazz"              -> {"command":"cast","value":"jazz music"}
+  "put on some jazz"            -> {"command":"cast","value":"jazz music"}
   "set kitchen volume to 50"   -> {"command":"volume","device":"k","value":"50"}
   "put kitchen on"             -> {"command":"device","value":"k"}
   "turn off in 20 minutes"     -> {"command":"sleep","value":"20"}
   "louder"                     -> {"command":"volume","value":"up"}
   "switch to the news channel" -> {"command":"channel","value":"news"}
   "speak hello"                -> {"command":"tts","value":"hello"}
+  "Radio Rahman"               -> {"command":"channel","value":"arr"}
+  "Radio Lime"                 -> {"command":"channel","value":"lime"}
 
 If you cannot map the message to a valid command, return {"command":"unknown"}.`;
 
