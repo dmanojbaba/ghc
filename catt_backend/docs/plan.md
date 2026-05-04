@@ -14,9 +14,10 @@ The existing `CattDevice` class in `catt/api.py` is too limited. We'll import an
 
 ```
 catt_backend/
-├── app.py                   # Flask application (standalone, imports from catt)
-├── requirements.txt         # flask + catt + gtts
-├── Dockerfile               # slim Python image
+├── app.py                           # Flask application (standalone, imports from catt)
+├── pychromecast_workarounds.py      # Workaround for pychromecast#866 (delete when fixed)
+├── requirements.txt                 # flask + catt + gtts + gunicorn
+├── Dockerfile                       # slim Python image
 ├── .dockerignore
 ├── docs/
 │   ├── plan.md
@@ -27,6 +28,7 @@ catt_backend/
     ├── test_cast_site.py
     ├── test_error_handling.py
     ├── test_playback_controls.py
+    ├── test_pychromecast_workarounds.py
     ├── test_response_shape.py
     ├── test_seek_controls.py
     ├── test_status_info.py
@@ -104,10 +106,10 @@ Every response — success or error — must be valid JSON with `Content-Type: a
 catt
 flask>=3.0
 gtts
-gunicorn>=22.0
-pychromecast>=14.0
-zeroconf>=0.132
+gunicorn>=25.3.0
 ```
+
+`pychromecast` and `zeroconf` are omitted — they are transitive dependencies of `catt` and are managed by catt's own version constraints. Listing them separately risks overriding catt's pinned range and pulling in an incompatible version.
 
 ## `catt_backend/Dockerfile`
 
@@ -125,7 +127,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir --upgrade yt-dlp
 
-COPY app.py .
+COPY *.py ./
 
 EXPOSE 5000
 
@@ -142,15 +144,21 @@ Key choices:
 
 ## `catt_backend/app.py`
 
-Standalone Flask app. Imports directly from the installed `catt` package:
+Standalone Flask app. Imports from the installed `catt` package and `pychromecast_workarounds`:
 
 ```python
-from catt.controllers import setup_cast
 from catt.error import CattError, CattUserError
 from catt.http_server import serve_file
 from catt.subs_info import SubsInfo
 from catt.util import hunt_subtitles
+from pychromecast_workarounds import setup_cast, disconnect_after_request
 ```
+
+`setup_cast` is imported from `pychromecast_workarounds` rather than directly from `catt.controllers` — see that module for details and removal instructions.
+
+## `catt_backend/pychromecast_workarounds.py`
+
+Workaround for [pychromecast#866](https://github.com/home-assistant-libs/pychromecast/issues/866). Wraps `setup_cast` to track the raw `Chromecast` object per thread, and exposes `disconnect_after_request()` which is called in a `finally` block after every handler. This disconnects the socket client thread cleanly before it can spin on a stopped Zeroconf instance. Delete this file when upstream is fixed (removal instructions are inside).
 
 Structure:
 - `_ok(data)` / `_err(msg, type, status)` — response helpers returning `{"status": "success/error", ...}`

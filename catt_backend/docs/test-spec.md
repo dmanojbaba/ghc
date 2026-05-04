@@ -188,30 +188,46 @@ def mock_cast():
 
 ---
 
-## 9. Error Handling
+## 9. Pychromecast Workarounds
+
+Tests for `pychromecast_workarounds.py` — isolated from `app.py`, monkeypatching `_setup_cast` directly on the module.
 
 | # | Test | Scenario | Expected |
 |---|---|---|---|
-| 9.1 | `CattUserError` → 400 | Any handler raises `CattUserError` | 400, `status: error`, `error_type` matches class name |
-| 9.2 | `CastError` → 400 | Device not found | 400, `error_type: CastError` |
-| 9.3 | `ControllerError` → 400 | Unsupported action on controller | 400, `error_type: ControllerError` |
-| 9.4 | Internal `CattError` → 500 | e.g. `ListenerError` raised | 500, `status: error` |
-| 9.5 | Unexpected exception → 500 | Handler raises `RuntimeError` | 500, `error_type: InternalError` |
-| 9.6 | Response always has `status` field | All responses | `status` is always `"success"` or `"error"` |
-| 9.7 | Timeout → 504 | Handler takes longer than `--timeout` | 504, `error_type: TimeoutError` |
+| 9.1 | `setup_cast` stores raw cast (single return) | `_setup_cast` returns a plain controller | `_thread_local.cast` is set to `controller._cast` |
+| 9.2 | `setup_cast` stores raw cast (tuple return) | `_setup_cast` returns `(controller, stream)` | `_thread_local.cast` is set to `controller._cast`, tuple is returned unchanged |
+| 9.3 | `setup_cast` non-tuple passthrough | Plain controller return | Result is the controller unchanged |
+| 9.4 | `disconnect_after_request` calls disconnect | Cast present in thread-local | `cast.disconnect()` called with no arguments |
+| 9.5 | `disconnect_after_request` clears thread-local | Cast present | `_thread_local.cast` is `None` after call |
+| 9.6 | `disconnect_after_request` is noop when cast is None | `_thread_local.cast = None` | No exception raised |
+| 9.7 | `disconnect_after_request` is noop when thread-local unset | Attribute never set | No exception raised |
 
 ---
 
-## 10. Response Shape and JSON Validity
+## 10. Error Handling
+
+| # | Test | Scenario | Expected |
+|---|---|---|---|
+| 10.1 | `CattUserError` → 400 | Any handler raises `CattUserError` | 400, `status: error`, `error_type` matches class name |
+| 10.2 | `CastError` → 400 | Device not found | 400, `error_type: CastError` |
+| 10.3 | `ControllerError` → 400 | Unsupported action on controller | 400, `error_type: ControllerError` |
+| 10.4 | Internal `CattError` → 500 | e.g. `ListenerError` raised | 500, `status: error` |
+| 10.5 | Unexpected exception → 500 | Handler raises `RuntimeError` | 500, `error_type: InternalError` |
+| 10.6 | Response always has `status` field | All responses | `status` is always `"success"` or `"error"` |
+| 10.7 | Timeout → 504 | Handler takes longer than `--timeout` | 504, `error_type: TimeoutError` |
+
+---
+
+## 11. Response Shape and JSON Validity
 
 | # | Test | Expected |
 |---|---|---|
-| 10.1 | Success with data | `{"status": "success", "data": {...}}` |
-| 10.2 | Success without data | `{"status": "success", "data": null}` |
-| 10.3 | Error response | `{"status": "error", "error": "...", "error_type": "..."}` |
-| 10.4 | Content-Type header | `application/json` on all responses, including errors |
-| 10.5 | All responses are valid JSON | `json.loads(response.data)` must not raise for every response |
-| 10.6 | `info` response is serialisable | Non-serialisable types (UUID, datetime, etc.) converted to strings |
-| 10.7 | 400 errors return JSON | Validation errors return JSON, not HTML or plain text |
-| 10.8 | 500 errors return JSON | Unhandled exceptions return JSON, not Flask's default HTML error page |
-| 10.9 | `status` field always present | All responses contain `status` as either `"success"` or `"error"` |
+| 11.1 | Success with data | `{"status": "success", "data": {...}}` |
+| 11.2 | Success without data | `{"status": "success", "data": null}` |
+| 11.3 | Error response | `{"status": "error", "error": "...", "error_type": "..."}` |
+| 11.4 | Content-Type header | `application/json` on all responses, including errors |
+| 11.5 | All responses are valid JSON | `json.loads(response.data)` must not raise for every response |
+| 11.6 | `info` response is serialisable | Non-serialisable types (UUID, datetime, etc.) converted to strings |
+| 11.7 | 400 errors return JSON | Validation errors return JSON, not HTML or plain text |
+| 11.8 | 500 errors return JSON | Unhandled exceptions return JSON, not Flask's default HTML error page |
+| 11.9 | `status` field always present | All responses contain `status` as either `"success"` or `"error"` |

@@ -5,20 +5,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt pytest
+# Create local environment (Python 3.12 matches the Docker image — required for pychromecast 14.x)
+python3.12 -m venv .venv
+.venv/bin/pip install -r requirements.txt pytest
 
 # Run all tests
-pytest tests/
+.venv/bin/pytest tests/
 
 # Run a single test file
-pytest tests/test_cast.py
+.venv/bin/pytest tests/test_cast.py
 
 # Run a single test
-pytest tests/test_validation.py::test_missing_command
+.venv/bin/pytest tests/test_validation.py::test_missing_command
 
 # Run the server directly (dev)
-python app.py --debug
+.venv/bin/python app.py --debug
 
 # Docker build and run (must use --network host for mDNS Chromecast discovery)
 docker build -t catt-backend .
@@ -27,7 +28,10 @@ docker run --network host -e CATT_BACKEND_SECRET=your-secret catt-backend
 
 ## Architecture
 
-Single-file Flask REST API (`app.py`) wrapping the [`catt`](https://github.com/skorokithakis/catt) CLI library. Exposes one endpoint: `POST /catt`.
+Flask REST API wrapping the [`catt`](https://github.com/skorokithakis/catt) CLI library. Exposes one endpoint: `POST /catt`. Two files:
+
+- **`app.py`** — request handling, routing, all command handlers
+- **`pychromecast_workarounds.py`** — workaround for [pychromecast#866](https://github.com/home-assistant-libs/pychromecast/issues/866): wraps `setup_cast` to disconnect the Chromecast after each request, preventing background reconnect threads from spinning on a stopped Zeroconf instance. Delete this file when upstream is fixed (see instructions inside).
 
 ### Request flow
 
@@ -39,9 +43,11 @@ POST /catt  {command, device?, value?, ...}
      ├── command lookup in ACTION_HANDLERS
      └── executor.submit(handler)  ← ThreadPoolExecutor, 45s timeout
               │
-              └── setup_cast()  ← catt library (mDNS device discovery)
-                       │
-                       └── Chromecast device
+              ├── setup_cast()  ← pychromecast_workarounds (wraps catt, mDNS discovery)
+              │        │
+              │        └── Chromecast device
+              │
+              └── disconnect_after_request()  ← pychromecast_workarounds (always, in finally)
 ```
 
 ### Commands
@@ -94,8 +100,12 @@ When `value` is a local file path, `app.py` spawns a background `Thread` running
 
 Tests use `pytest` with `monkeypatch.setattr("app.setup_cast", ...)` to mock the catt library — no real Chromecast needed. Fixtures `mock_cast` and `mock_stream` are defined in `conftest.py`. Tests cover validation, auth, all 15 commands, error handling, seek, volume, and response shape.
 
+`test_pychromecast_workarounds.py` tests the workaround module in isolation by monkeypatching `_setup_cast` directly on the module. It covers both return shapes of `setup_cast` (plain controller and `(controller, stream)` tuple), and all `disconnect_after_request` paths (cast present, cast absent, thread-local unset).
+
 ## Deployment
 
 Runs on a Raspberry Pi inside Docker, exposed to the internet via Cloudflare Tunnel. `--network host` is required so the container can reach Chromecast devices via mDNS on the LAN.
 
 Production config (gunicorn): 1 worker, 4 threads, 60s timeout.
+
+The Dockerfile uses `COPY *.py ./` so all root-level Python modules are included automatically. Avoid placing scripts in the root that shouldn't be in the image (e.g. migration scripts, one-offs).

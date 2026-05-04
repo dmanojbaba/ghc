@@ -9,11 +9,13 @@ from datetime import datetime, date
 from flask import Flask, request, jsonify
 from gtts import gTTS
 
-from catt.controllers import setup_cast
 from catt.error import CattError, CattUserError
 from catt.http_server import serve_file
 from catt.subs_info import SubsInfo
 from catt.util import hunt_subtitles
+
+# Workaround import — see pychromecast_workarounds.py for removal instructions.
+from pychromecast_workarounds import setup_cast, disconnect_after_request
 
 TTS_FILE = "/tmp/cast_tts.mp3"
 
@@ -261,7 +263,10 @@ def handle_catt():
 
     def run_in_context():
         with app.app_context():
-            return handler(body)
+            try:
+                return handler(body)
+            finally:
+                disconnect_after_request()  # Workaround — see pychromecast_workarounds.py
 
     future = executor.submit(run_in_context)
     try:
