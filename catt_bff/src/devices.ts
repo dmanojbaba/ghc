@@ -98,16 +98,16 @@ export const DEVICES: DeviceDefinition[] = [
         },
         { key: "dubai", names: ["Radio Dubai", "89.4 Tamil FM"], number: "5" },
         {
-          key: "raja",
-          names: ["Radio Raja", "Radio Ilaiyaraaja"],
-          number: "6",
-        },
-        { key: "lime", names: ["Radio Lime"], number: "7" },
-        {
           key: "chennai",
           names: ["Radio Chennai", "Radio Mirchi"],
-          number: "8",
+          number: "6",
         },
+        {
+          key: "raja",
+          names: ["Radio Raja", "Radio Ilaiyaraaja"],
+          number: "7",
+        },
+        { key: "lime", names: ["Radio Lime"], number: "8" },
         { key: "arr", names: ["Radio ARR", "Radio Rahman"], number: "9" },
       ],
       commandOnlyChannels: true,
