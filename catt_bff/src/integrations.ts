@@ -1,5 +1,5 @@
 import { castCommand } from "./catt";
-import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, getDeviceList, getChannelListWithSynonyms, DEVICE_ID } from "./devices";
+import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, getDeviceList, getChannelList, getChannelListWithSynonyms, DEVICE_ID } from "./devices";
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 
@@ -126,16 +126,22 @@ const KNOWN_COMMANDS = new Set([
 
 type ParsedCommand = { command: string; device?: string; value?: string };
 
-async function parseWithAI(text: string, env: Env): Promise<ParsedCommand | null> {
+async function parseWithAI(text: string, env: Env): Promise<ParsedCommand[] | null> {
   if (!env.CATT_AI) return null;
 
   const devices = getDeviceList(DEVICE_ID).map((d) => `${d.key}=${d.name}`).join(", ");
+  const channelNumbers = new Map(getChannelList(DEVICE_ID).map((c) => [c.key, c.number]));
   const channels = getChannelListWithSynonyms(DEVICE_ID)
-    .map((c) => `${c.key}=${c.names.join("|")}`)
+    .map((c) => {
+      const num = channelNumbers.get(c.key);
+      const names = num ? [...c.names, num] : c.names;
+      return `${c.key}=${names.join("|")}`;
+    })
     .join(", ");
 
   const systemPrompt = `You are a command parser for a Chromecast controller.
-Return ONLY valid JSON with this shape: {"command":"...","device":"...","value":"..."}
+Return ONLY valid JSON — either a single command object or an array of command objects for compound requests.
+Each object has this shape: {"command":"...","device":"...","value":"..."}
 device and value are optional strings.
 
 Valid commands: cast, tts, volume, mute, unmute, play, stop, clear, reset, prev, next, rewind, ffwd, sleep, channel, device, playlist, state, help
@@ -154,7 +160,20 @@ Examples:
   "speak hello"                -> {"command":"tts","value":"hello"}
   "Radio Rahman"               -> {"command":"channel","value":"arr"}
   "Radio Lime"                 -> {"command":"channel","value":"lime"}
+  "stream radio lime"          -> {"command":"channel","value":"lime"}
+  "stream some jazz"           -> {"command":"cast","value":"jazz music"}
+  "play radio chennai"         -> {"command":"channel","value":"chennai"}
+  "play radio lime"            -> {"command":"channel","value":"lime"}
+  "please play radio chennai"  -> {"command":"channel","value":"chennai"}
+  "please play radio lime"     -> {"command":"channel","value":"lime"}
+  "can you play radio lime"    -> {"command":"channel","value":"lime"}
+  "can you play radio chennai" -> {"command":"channel","value":"chennai"}
+  "can you play sun news"      -> {"command":"channel","value":"sun"}
+  "please play sun news"       -> {"command":"channel","value":"sun"}
   "replay my playlist"         -> {"command":"playlist"}
+  "please play my playlist"    -> {"command":"playlist"}
+  "play radio lime for 30 minutes"       -> [{"command":"channel","value":"lime"},{"command":"sleep","value":"30"}]
+  "please play channel 6 for 1 hour"    -> [{"command":"channel","value":"chennai"},{"command":"sleep","value":"60"}]
 
 If you cannot map the message to a valid command, return {"command":"unknown"}.`;
 
@@ -167,9 +186,11 @@ If you cannot map the message to a valid command, return {"command":"unknown"}.`
     }) as { response?: string };
 
     const raw = result.response?.trim() ?? "";
-    const parsed = JSON.parse(raw) as ParsedCommand;
-    if (!parsed.command || parsed.command === "unknown" || !KNOWN_COMMANDS.has(parsed.command)) return null;
-    return parsed;
+    const parsed = JSON.parse(raw) as ParsedCommand | ParsedCommand[];
+    const commands = Array.isArray(parsed) ? parsed : [parsed];
+    const valid = commands.filter(c => c.command && c.command !== "unknown" && KNOWN_COMMANDS.has(c.command));
+    if (valid.length === 0) return null;
+    return valid;
   } catch {
     return null;
   }
@@ -324,25 +345,28 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
   const { device, rawValue } = parseTokens(rest);
 
   if (!KNOWN_COMMANDS.has(command)) {
-    const parsed = await parseWithAI(text, env);
-    if (!parsed) {
+    const parsedList = await parseWithAI(text, env);
+    if (!parsedList) {
       if (chatId && env.TELEGRAM_BOT_TOKEN) {
         await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, "Unknown command");
       }
       return Response.json({});
     }
-    if (parsed.device && parsed.device in INPUT_TO_DEVICE) {
-      await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(parsed.device)}`));
-    }
     try {
-      const dispatched = await dispatchCommand(parsed.command, parsed.device ?? "", parsed.value ?? "", env, doStub);
+      const confirmLines: string[] = [];
+      for (const parsed of parsedList) {
+        if (parsed.device && parsed.device in INPUT_TO_DEVICE) {
+          await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(parsed.device)}`));
+        }
+        const dispatched = await dispatchCommand(parsed.command, parsed.device ?? "", parsed.value ?? "", env, doStub);
+        confirmLines.push(`command: ${dispatched}`);
+        if (parsed.value) confirmLines.push(`value: ${parsed.value}`);
+      }
       if (chatId && env.TELEGRAM_BOT_TOKEN) {
         const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
         const state = await stateRes.json() as { device?: string };
-        const lines = [`command: ${dispatched}`];
-        if (parsed.value) lines.push(`value: ${parsed.value}`);
-        lines.push(`device: ${state.device ?? ""}`);
-        await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, lines.join("\n"));
+        confirmLines.push(`device: ${state.device ?? ""}`);
+        await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, confirmLines.join("\n"));
       }
     } catch {
       if (chatId && env.TELEGRAM_BOT_TOKEN) {

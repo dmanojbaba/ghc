@@ -854,7 +854,7 @@ describe("handleTelegram — AI fallback", () => {
     expect(ai.run).not.toHaveBeenCalled();
   });
 
-  it("AI system prompt includes channel synonyms", async () => {
+  it("AI system prompt includes channel synonyms and numbers", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi(JSON.stringify({ command: "channel", value: "arr" }));
     const env = makeEnv({ CATT_AI: ai });
@@ -867,7 +867,7 @@ describe("handleTelegram — AI fallback", () => {
     await handleTelegram(makeTelegramRequest("Radio Rahman", 111), env, stub);
     expect(ai.run).toHaveBeenCalledOnce();
     const prompt = (ai.run as ReturnType<typeof vi.fn>).mock.calls[0][1].messages[0].content as string;
-    expect(prompt).toContain("arr=Radio ARR|Radio Rahman");
+    expect(prompt).toContain("arr=Radio ARR|Radio Rahman|9");
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.some((c: unknown[]) => (c[0] as Request).url.includes("/channel/arr"))).toBe(true);
   });
@@ -925,6 +925,28 @@ describe("handleTelegram — AI fallback", () => {
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toBe("Backend error");
+  });
+
+  it("dispatches compound commands and sends combined confirmation", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const ai = makeAi(JSON.stringify([
+      { command: "channel", value: "lime" },
+      { command: "sleep", value: "30" },
+    ]));
+    const env = makeEnv({ CATT_AI: ai });
+    const stub = {
+      fetch: vi.fn(async (req: Request) => {
+        if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "o" }));
+        return new Response("ok");
+      }),
+    } as unknown as DurableObjectStub;
+    await handleTelegram(makeTelegramRequest("stream radio lime for 30 minutes", 111), env, stub);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
+    expect(calls.some(u => u.includes("channel") && u.includes("lime"))).toBe(true);
+    expect(calls.some(u => u.includes("sleep") && u.includes("30"))).toBe(true);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toBe("command: channel\nvalue: lime\ncommand: sleep\nvalue: 30\ndevice: o");
   });
 });
 
