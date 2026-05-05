@@ -52,7 +52,7 @@ def test_disconnect_after_request_calls_disconnect(monkeypatch):
 
     workarounds.disconnect_after_request()
 
-    raw_cast.disconnect.assert_called_once_with()
+    raw_cast.disconnect.assert_called_once_with(timeout=5)
 
 
 def test_disconnect_after_request_clears_thread_local(monkeypatch):

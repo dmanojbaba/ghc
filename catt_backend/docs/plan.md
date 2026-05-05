@@ -158,7 +158,7 @@ from pychromecast_workarounds import setup_cast, disconnect_after_request
 
 ## `catt_backend/pychromecast_workarounds.py`
 
-Workaround for [pychromecast#866](https://github.com/home-assistant-libs/pychromecast/issues/866). Wraps `setup_cast` to track the raw `Chromecast` object per thread, and exposes `disconnect_after_request()` which is called in a `finally` block after every handler. This disconnects the socket client thread cleanly before it can spin on a stopped Zeroconf instance. Delete this file when upstream is fixed (removal instructions are inside).
+Workaround for [pychromecast#866](https://github.com/home-assistant-libs/pychromecast/issues/866). Wraps `setup_cast` to track the raw `Chromecast` object per thread, and exposes `disconnect_after_request()` which is called in a `finally` block after every handler. Calls `cast.disconnect(timeout=5)` — blocks up to 5 seconds for the socket thread to fully stop before the next request can start, preventing the background thread from spinning on a stopped Zeroconf instance. Delete this file when upstream is fixed (removal instructions are inside).
 
 Structure:
 - `_ok(data)` / `_err(msg, type, status)` — response helpers returning `{"status": "success/error", ...}`
