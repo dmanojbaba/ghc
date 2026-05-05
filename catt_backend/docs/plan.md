@@ -103,7 +103,7 @@ Every response — success or error — must be valid JSON with `Content-Type: a
 ## `catt_backend/requirements.txt`
 
 ```
-catt
+catt==0.13.1
 flask>=3.0
 gtts
 gunicorn>=25.3.0
