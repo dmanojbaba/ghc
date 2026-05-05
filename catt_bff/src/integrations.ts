@@ -186,9 +186,9 @@ If you cannot map the message to a valid command, return {"command":"unknown"}.`
         { role: "system", content: systemPrompt },
         { role: "user", content: text },
       ],
-    }) as { response?: string };
+    }) as { response?: unknown };
 
-    const raw = result.response?.trim() ?? "";
+    const raw = typeof result.response === "string" ? result.response.trim() : "";
     console.log("[AI] raw response:", raw);
     const parsed = JSON.parse(raw) as ParsedCommand | ParsedCommand[];
     const commands = Array.isArray(parsed) ? parsed : [parsed];
