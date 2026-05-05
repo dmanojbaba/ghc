@@ -164,8 +164,8 @@ Response:
   { "key": "dubai",   "name": "Radio Dubai",   "number": "5" },
   { "key": "chennai", "name": "Radio Chennai", "number": "6" },
   { "key": "raja",    "name": "Radio Raja",    "number": "7" },
-  { "key": "lime",    "name": "Radio Lime",    "number": "8" },
-  { "key": "arr",     "name": "Radio ARR",     "number": "9" }
+  { "key": "arr",     "name": "Radio ARR",     "number": "8" },
+  { "key": "lime",    "name": "Radio Lime",    "number": "9" }
 ]
 ```
 

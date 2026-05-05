@@ -107,8 +107,8 @@ export const DEVICES: DeviceDefinition[] = [
           names: ["Radio Raja", "Radio Ilaiyaraaja"],
           number: "7",
         },
-        { key: "lime", names: ["Radio Lime"], number: "8" },
-        { key: "arr", names: ["Radio ARR", "Radio Rahman"], number: "9" },
+        { key: "arr", names: ["Radio ARR", "Radio Rahman"], number: "8" },
+        { key: "lime", names: ["Radio Lime"], number: "9" },
       ],
       commandOnlyChannels: true,
       availableToggles: [
@@ -263,10 +263,7 @@ export function getAdjacentChannel(
   return currentKey;
 }
 
-export function getChannelKey(
-  deviceId: string,
-  input: string,
-): string | null {
+export function getChannelKey(deviceId: string, input: string): string | null {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
     const channels = d.attributes.availableChannels as Array<{
@@ -285,19 +282,26 @@ export function getChannelKey(
   return null;
 }
 
-export function getDeviceList(deviceId: string): Array<{ key: string; name: string }> {
+export function getDeviceList(
+  deviceId: string,
+): Array<{ key: string; name: string }> {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
     const inputs = d.attributes.availableInputs as Array<{
       key: string;
       names: Array<{ name_synonym: string[] }>;
     }>;
-    return inputs.map((i) => ({ key: i.key, name: i.names[0].name_synonym[0] }));
+    return inputs.map((i) => ({
+      key: i.key,
+      name: i.names[0].name_synonym[0],
+    }));
   }
   return [];
 }
 
-export function getChannelList(deviceId: string): Array<{ key: string; name: string; number: string }> {
+export function getChannelList(
+  deviceId: string,
+): Array<{ key: string; name: string; number: string }> {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
     const channels = d.attributes.availableChannels as Array<{
@@ -313,7 +317,9 @@ export function getChannelList(deviceId: string): Array<{ key: string; name: str
   return [];
 }
 
-export function getChannelListWithSynonyms(deviceId: string): Array<{ key: string; names: string[] }> {
+export function getChannelListWithSynonyms(
+  deviceId: string,
+): Array<{ key: string; names: string[] }> {
   for (const d of DEVICES) {
     if (d.id !== deviceId) continue;
     const channels = d.attributes.availableChannels as Array<{

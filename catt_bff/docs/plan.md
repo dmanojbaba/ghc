@@ -84,7 +84,7 @@ Single logical device (`id: "box"`) representing all Chromecasts. Inputs map to 
 
 Default input on power-on: `otv`. Default playlist: `""` (unset).
 
-Channels: `ping` (1), `sun` / Sun News (2), `pttv` / Tamil News (3), `london` (4), `dubai` (5), `chennai` (6), `raja` (7), `lime` (8), `arr` (9).
+Channels: `ping` (1), `sun` / Sun News (2), `pttv` / Tamil News (3), `london` (4), `dubai` (5), `chennai` (6), `raja` (7), `arr` (8), `lime` (9).
 
 Default channel on power-on: `ping` (1).
 

@@ -867,7 +867,7 @@ describe("handleTelegram — AI fallback", () => {
     await handleTelegram(makeTelegramRequest("Radio Rahman", 111), env, stub);
     expect(ai.run).toHaveBeenCalledOnce();
     const prompt = (ai.run as ReturnType<typeof vi.fn>).mock.calls[0][1].messages[0].content as string;
-    expect(prompt).toContain("arr=Radio ARR|Radio Rahman|9");
+    expect(prompt).toContain("arr=Radio ARR|Radio Rahman|8");
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.some((c: unknown[]) => (c[0] as Request).url.includes("/channel/arr"))).toBe(true);
   });
