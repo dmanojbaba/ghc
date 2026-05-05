@@ -170,6 +170,8 @@ Examples:
   "can you play radio chennai" -> {"command":"channel","value":"chennai"}
   "can you play sun news"      -> {"command":"channel","value":"sun"}
   "please play sun news"       -> {"command":"channel","value":"sun"}
+  "hey play radio lime"        -> {"command":"channel","value":"lime"}
+  "hello play radio chennai"   -> {"command":"channel","value":"chennai"}
   "replay my playlist"         -> {"command":"playlist"}
   "please play my playlist"    -> {"command":"playlist"}
   "play radio lime for 30 minutes"       -> [{"command":"channel","value":"lime"},{"command":"sleep","value":"30"}]

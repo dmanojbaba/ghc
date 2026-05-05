@@ -249,8 +249,14 @@ export class DeviceQueue implements DurableObject {
         return;
       }
       // Live stream (no duration) — never ends naturally, no need to poll
+      // but keep the alarm alive if a sleep timer is pending
       if (isPlaying && !duration) {
-        await this.state.storage.deleteAlarm();
+        const sleepAt = this.get("sleep_at");
+        if (sleepAt) {
+          await this.state.storage.setAlarm(Number(sleepAt));
+        } else {
+          await this.state.storage.deleteAlarm();
+        }
         return;
       }
 
@@ -489,8 +495,9 @@ export class DeviceQueue implements DurableObject {
         if (!minutes || minutes <= 0) return new Response("invalid minutes", { status: 400 });
         const sleepAt = Date.now() + minutes * 60_000;
         this.set("sleep_at", String(sleepAt));
-        // If session is idle the polling alarm isn't running — set one directly
-        if (this.get("session") === DEFAULT_SESSION) {
+        // Set alarm to sleep_at if no sooner alarm is already scheduled
+        const existingAlarm = await this.state.storage.getAlarm();
+        if (!existingAlarm || sleepAt < existingAlarm) {
           await this.state.storage.setAlarm(sleepAt);
         }
         return new Response("ok");
