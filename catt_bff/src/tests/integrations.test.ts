@@ -950,6 +950,28 @@ describe("handleTelegram — AI fallback", () => {
   });
 });
 
+describe("handleTelegram — /start command", () => {
+  it("sends HELP_TEXT for /start", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const env = makeEnv();
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("/start", 111), env, stub);
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toContain("Commands:");
+    expect(stub.fetch).not.toHaveBeenCalled();
+  });
+
+  it("does NOT call AI for /start", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const ai = makeAi(JSON.stringify({ command: "cast", value: "jazz" }));
+    const env = makeEnv({ CATT_AI: ai });
+    const stub = makeDoStub();
+    await handleTelegram(makeTelegramRequest("/start", 111), env, stub);
+    expect(ai.run).not.toHaveBeenCalled();
+  });
+});
+
 describe("handleTelegram — error handling", () => {
   it("sends 'Backend error' when dispatchCommand throws (known command path)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));

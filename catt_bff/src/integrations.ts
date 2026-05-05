@@ -121,7 +121,7 @@ async function dispatchCommand(
 
 const KNOWN_COMMANDS = new Set([
   "cast", "tts", "speak", "talk", "volume", "mute", "unmute", "play", "stop",
-  "clear", "reset", "prev", "next", "rewind", "ffwd", "sleep", "channel", "device", "playlist", "state", "history", "help",
+  "clear", "reset", "prev", "next", "rewind", "ffwd", "sleep", "channel", "device", "playlist", "state", "history", "help", "start",
 ]);
 
 type ParsedCommand = { command: string; device?: string; value?: string };
@@ -326,7 +326,7 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
   if (!command) return Response.json({});
 
   if (chatId && env.TELEGRAM_BOT_TOKEN) {
-    if (command === "help") {
+    if (command === "help" || command === "start") {
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, HELP_TEXT, true);
       return Response.json({});
     }
