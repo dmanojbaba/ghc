@@ -35,5 +35,8 @@ def setup_cast(*args, **kwargs):
 def disconnect_after_request():
     cast = getattr(_thread_local, "cast", None)
     if cast:
-        cast.disconnect()
+        try:
+            cast.disconnect(timeout=5)
+        except Exception:
+            pass
         _thread_local.cast = None

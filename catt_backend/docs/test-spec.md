@@ -197,7 +197,7 @@ Tests for `pychromecast_workarounds.py` — isolated from `app.py`, monkeypatchi
 | 9.1 | `setup_cast` stores raw cast (single return) | `_setup_cast` returns a plain controller | `_thread_local.cast` is set to `controller._cast` |
 | 9.2 | `setup_cast` stores raw cast (tuple return) | `_setup_cast` returns `(controller, stream)` | `_thread_local.cast` is set to `controller._cast`, tuple is returned unchanged |
 | 9.3 | `setup_cast` non-tuple passthrough | Plain controller return | Result is the controller unchanged |
-| 9.4 | `disconnect_after_request` calls disconnect | Cast present in thread-local | `cast.disconnect()` called with no arguments |
+| 9.4 | `disconnect_after_request` calls disconnect | Cast present in thread-local | `cast.disconnect(timeout=5)` called |
 | 9.5 | `disconnect_after_request` clears thread-local | Cast present | `_thread_local.cast` is `None` after call |
 | 9.6 | `disconnect_after_request` is noop when cast is None | `_thread_local.cast = None` | No exception raised |
 | 9.7 | `disconnect_after_request` is noop when thread-local unset | Attribute never set | No exception raised |
