@@ -180,6 +180,7 @@ Examples:
 If you cannot map the message to a valid command, return {"command":"unknown"}.`;
 
   try {
+    console.log("[AI] input:", text);
     const result = await env.CATT_AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
       messages: [
         { role: "system", content: systemPrompt },
@@ -188,12 +189,15 @@ If you cannot map the message to a valid command, return {"command":"unknown"}.`
     }) as { response?: string };
 
     const raw = result.response?.trim() ?? "";
+    console.log("[AI] raw response:", raw);
     const parsed = JSON.parse(raw) as ParsedCommand | ParsedCommand[];
     const commands = Array.isArray(parsed) ? parsed : [parsed];
     const valid = commands.filter(c => c.command && c.command !== "unknown" && KNOWN_COMMANDS.has(c.command));
+    console.log("[AI] valid commands:", JSON.stringify(valid));
     if (valid.length === 0) return null;
     return valid;
-  } catch {
+  } catch (err) {
+    console.log("[AI] error:", err instanceof Error ? err.message : String(err));
     return null;
   }
 }
