@@ -126,9 +126,7 @@ const KNOWN_COMMANDS = new Set([
 
 type ParsedCommand = { command: string; device?: string; value?: string };
 
-async function parseWithAI(text: string, env: Env): Promise<ParsedCommand[] | null> {
-  if (!env.CATT_AI) return null;
-
+const AI_SYSTEM_PROMPT = (() => {
   const devices = getDeviceList(DEVICE_ID).map((d) => `${d.key}=${d.name}`).join(", ");
   const channelNumbers = new Map(getChannelList(DEVICE_ID).map((c) => [c.key, c.number]));
   const channels = getChannelListWithSynonyms(DEVICE_ID)
@@ -139,7 +137,7 @@ async function parseWithAI(text: string, env: Env): Promise<ParsedCommand[] | nu
     })
     .join(", ");
 
-  const systemPrompt = `You are a command parser for a Chromecast controller.
+  return `You are a command parser for a Chromecast controller.
 Return ONLY valid JSON — either a single command object or an array of command objects for compound requests.
 Each object has this shape: {"command":"...","device":"...","value":"..."}
 device and value are optional strings.
@@ -178,28 +176,34 @@ Examples:
   "please play channel 6 for 1 hour"    -> [{"command":"channel","value":"chennai"},{"command":"sleep","value":"60"}]
 
 If you cannot map the message to a valid command, return {"command":"unknown"}.`;
+})();
+
+async function parseWithAI(text: string, env: Env): Promise<ParsedCommand[] | null> {
+  if (!env.CATT_AI) return null;
 
   try {
     console.log("[AI] input:", text);
     const result = await env.CATT_AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: AI_SYSTEM_PROMPT },
         { role: "user", content: text },
       ],
-      stream: false,
     }) as { response?: unknown };
 
     const raw = typeof result.response === "string" ? result.response.trim() : "";
     console.log("[AI] raw response:", raw);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as ParsedCommand | ParsedCommand[];
+    const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const parsed = JSON.parse(stripped) as ParsedCommand | ParsedCommand[];
     const commands = Array.isArray(parsed) ? parsed : [parsed];
     const valid = commands.filter(c => c.command && c.command !== "unknown" && KNOWN_COMMANDS.has(c.command));
     console.log("[AI] valid commands:", JSON.stringify(valid));
     if (valid.length === 0) return null;
     return valid;
   } catch (err) {
-    console.log("[AI] error:", err instanceof Error ? err.message : String(err));
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log("[AI] error:", msg);
+    throw err;
     return null;
   }
 }
@@ -353,7 +357,16 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
   const { device, rawValue } = parseTokens(rest);
 
   if (!KNOWN_COMMANDS.has(command)) {
-    const parsedList = await parseWithAI(text, env);
+    let parsedList: ParsedCommand[] | null = null;
+    try {
+      parsedList = await parseWithAI(text, env);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (chatId && env.TELEGRAM_BOT_TOKEN) {
+        await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, `AI error: ${msg.slice(0, 50)}`);
+      }
+      return Response.json({});
+    }
     if (!parsedList) {
       if (chatId && env.TELEGRAM_BOT_TOKEN) {
         await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, "Unknown command");

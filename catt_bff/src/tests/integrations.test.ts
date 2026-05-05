@@ -823,7 +823,7 @@ describe("handleTelegram — AI fallback", () => {
     expect(stub.fetch).not.toHaveBeenCalled();
   });
 
-  it("sends 'Unknown command' when AI returns malformed JSON", async () => {
+  it("sends AI error when AI returns malformed JSON", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi("not valid json");
     const env = makeEnv({ CATT_AI: ai });
@@ -831,10 +831,10 @@ describe("handleTelegram — AI fallback", () => {
     await handleTelegram(makeTelegramRequest("do the thing", 111), env, stub);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
-    expect(body.text).toContain("Unknown command");
+    expect(body.text).toContain("AI error:");
   });
 
-  it("sends 'Unknown command' when AI throws", async () => {
+  it("sends AI error when AI throws", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi(null);
     const env = makeEnv({ CATT_AI: ai });
@@ -842,7 +842,7 @@ describe("handleTelegram — AI fallback", () => {
     await handleTelegram(makeTelegramRequest("do something weird", 111), env, stub);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
-    expect(body.text).toContain("Unknown command");
+    expect(body.text).toContain("AI error:");
   });
 
   it("does NOT call AI for a known command", async () => {
