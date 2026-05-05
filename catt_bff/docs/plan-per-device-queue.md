@@ -551,6 +551,68 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 
 ---
 
+## Implementation stages
+
+### Stage 1: Infrastructure + DO cleanup
+**Goal**: KV namespace wired up, `device` key removed from DO, baseline tests still passing.
+**Files**: `wrangler.toml`, `worker-configuration.d.ts`, `src/devices.ts`, `src/DeviceQueue.ts`
+**Steps**:
+1. Add `DEVICE_SESSION` KV binding to `wrangler.toml`
+2. Run `npm run cf-typegen` to regenerate `worker-configuration.d.ts`
+3. Add `getAllDeviceKeys()` to `src/devices.ts`
+4. Remove `device` KV key from `DeviceQueue.ts` (`defaultFor()`, `clearState()`, `reset` route, `set/device` initialisation call, `getState()` return)
+5. Add `DEVICE_SESSION: { get: vi.fn(async () => null), put: vi.fn() }` to `makeEnv()` in all test files
+6. Run `npm test` — all existing tests must pass
+**Status**: Not Started
+
+---
+
+### Stage 2: Core BFF routing
+**Goal**: `index.ts` routes to per-device DOs via KV; `cattHandler.ts` uses passed `deviceKey` for volume.
+**Files**: `src/index.ts`, `src/cattHandler.ts`
+**Steps**:
+1. Add `getSessionDeviceKey()` helper to `index.ts`
+2. Update `/catt` route — X-Caller handling, `body.caller` fallback to `http:default`, KV session read/write, `device: "queue"` special case, reset KV on `reset` command
+3. Update `/device/*` route — X-Caller → session key → DO stub; inject `device` field into state response
+4. Update `/slack`, `/telegram`, `/fulfillment` routes to pass `env` / `deviceKey` as needed
+5. Update `scheduled` handler to iterate `getAllDeviceKeys()`
+6. Update `cattHandler.ts` — accept `deviceKey` param, remove `state.device` DO read for volume
+7. Update `src/tests/index.test.ts` and `src/tests/cattHandler.test.ts` with new tests (see test changes section)
+8. Run `npm test` — all tests must pass
+**Status**: Not Started
+
+---
+
+### Stage 3: Integrations + Google Home
+**Goal**: Telegram, Slack, and Google Home all read/write device via `catt_bff_kv`.
+**Files**: `src/integrations.ts`, `src/googleHome.ts`
+**Steps**:
+1. Update `handleTelegram` — remove pre-built `doStub` param; resolve DO stub internally after body parse; write KV on device alias; reset KV on `reset`
+2. Update `handleSlack` — write KV on device alias; reset KV on `reset`
+3. Update `handleFulfillment` — accept `deviceKey` + `env`; forward to `handleQuery` and `handleExecute`
+4. Update `handleQuery` — use passed `deviceKey` instead of `doSt.device`
+5. Update `SetInput`, `NextInput`, `PreviousInput` — write result to KV instead of DO
+6. Update `OnOff on` — reset KV session after DO reset
+7. Update `src/tests/integrations.test.ts` and `src/tests/googleHome.test.ts` (see test changes section)
+8. Run `npm test` — all tests must pass
+**Status**: Not Started
+
+---
+
+### Stage 4: Frontend
+**Goal**: Pages Functions identify themselves so BFF can route to the correct session.
+**Files**: `catt_frontend/functions/api/command.ts`, `catt_frontend/functions/api/admin/command.ts`, `catt_frontend/functions/api/state.ts`, `catt_frontend/functions/api/admin/state.ts`
+**Steps**:
+1. Add `X-Caller: kids` to `functions/api/command.ts` and tighten role guard to `["kids"]`
+2. Add `X-Caller: admin` to `functions/api/admin/command.ts`
+3. Add `X-Caller: kids` to `functions/api/state.ts`
+4. Add `X-Caller: admin` to `functions/api/admin/state.ts`
+5. Update `catt_frontend` tests (see test changes section)
+6. Run `npm test` in `catt_frontend` — all tests must pass
+**Status**: Not Started
+
+---
+
 ## What is explicitly out of scope
 
 - Migrating existing `"box"` DO history or queue data
