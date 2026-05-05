@@ -1,0 +1,563 @@
+# Plan: Per-Device Durable Objects with Unified KV Session
+
+## Goal
+
+Each physical Chromecast device gets its own isolated Durable Object instance — its own queue, history, alarm, sleep timer, and playback state. All callers (Telegram, Slack, Google Home, Kids UI, Admin UI, HTTP POST) store their active device in a single Cloudflare KV namespace (`catt_bff_kv`) and route to the correct per-device DO. All callers sharing the same physical device see the same queue.
+
+---
+
+## Background
+
+### Current model
+
+All callers share a single Durable Object keyed `"box"`. The active device is stored as a `device` KV entry inside that DO. All callers compete on the same state — switching devices in Telegram affects what Google Home controls next, and vice versa. Two users managing different devices step on each other's queue and playback state.
+
+### Target model
+
+```
+Caller              Active device source              DO instance
+──────────────────  ──────────────────────────────    ───────────
+Telegram (chatId)   catt_bff_kv: telegram:<chatId>   "k", "o", "b", etc.
+Slack               catt_bff_kv: slack:all            "k", "o", "b", etc.
+Google Home         catt_bff_kv: googlehome:all           "k", "o", "b", etc.
+Kids UI             catt_bff_kv: ui:kids              "k", "o", "b", etc.
+Admin UI            catt_bff_kv: ui:admin             "k", "o", "b", etc.
+HTTP POST (raw)     body.device (stateless) OR        "k", "o", "b", etc.
+                    catt_bff_kv: http:<caller>
+scheduled handler   all known device keys             one reset per DO
+```
+
+`catt_bff_kv` is the single source of truth for session device across all callers. Per-device DOs (`"k"`, `"o"`, `"b"`, `"zbk"`, `"tv"`, `"otv"`) are the single source of truth for queue, history, and playback state. The `"box"` DO is retired.
+
+### Key benefit: shared queue across callers
+
+Because all callers route to the same per-device DO, if Google Home switches to kitchen and the Kids UI enqueues a video to kitchen, they both hit the `"k"` DO and share the same queue, history, and alarm. There is no separate "Google Home queue" vs "Kids UI queue" for the same physical device.
+
+### Known limitation: physical device contention
+
+Two callers targeting the same physical Chromecast simultaneously (e.g. Telegram casting to kitchen while the Kids UI is also casting to kitchen) will interrupt each other at the hardware level. The software state in the DO remains consistent, but the physical device can only play one thing. This is an accepted limitation — the same reality exists today.
+
+---
+
+## What changes and what doesn't
+
+### Unchanged
+
+- `DeviceQueue.ts` — all queue, alarm, sleep, history, polling logic stays exactly the same
+- `catt.ts`, `urlHelper.ts`, `oauth.ts` — unchanged
+- `cattHandler.ts` — minimal change: receives `deviceKey` alongside `doStub` to eliminate the vestigial `state.device` read for volume
+- Auth logic in `index.ts` — unchanged
+- `/echo` route — unchanged
+- All Telegram and Slack command parsing and dispatch logic — unchanged
+- All device/channel name resolution (`getInputKey`, `INPUT_TO_DEVICE`, etc.) — unchanged
+- Google Home's external device ID (`DEVICE_ID = "box"`) — unchanged, this is Google's identifier and cannot change
+
+### The `device` KV inside each DO
+
+With one DO per physical device, the `device` KV becomes fully vestigial — the routing layer always selects the correct DO before any command reaches it, and `deviceKey` is passed explicitly to `cattHandler` so volume no longer reads it either. The `device` KV key is removed from `DeviceQueue.ts` as part of this plan (not deferred).
+
+### `catt_bff_kv` session reset behaviour
+
+On `reset`, each caller's KV session entry is reset to `DEFAULT_DEVICE` (`"o"`). Only the sending caller's entry is affected — all other callers are completely isolated.
+
+| Command | Caller | DO effect | KV effect |
+|---|---|---|---|
+| `reset` | Telegram | full DO state wipe | `telegram:<chatId>` → `DEFAULT_DEVICE` |
+| `reset` | Slack | full DO state wipe | `slack:all` → `DEFAULT_DEVICE` |
+| `reset` | HTTP POST | full DO state wipe | `http:<caller>` → `DEFAULT_DEVICE` |
+| `reset` | Kids UI | full DO state wipe | `ui:kids` → `DEFAULT_DEVICE` |
+| `reset` | Admin UI | full DO state wipe | `ui:admin` → `DEFAULT_DEVICE` |
+| GH `On` | Google Home | `/reset` — full DO state wipe | `googlehome:all` → `DEFAULT_DEVICE` |
+| GH `Off` | Google Home | `/off` — stop + full DO state wipe | KV session **unchanged** |
+| `clear` | any | clears queue/state, keeps device+app | KV session **unchanged** |
+
+`clear` leaves the KV session alone because the intent is to clear playback state while staying on the current device. `reset` is a full reset — it resets both the DO state and the routing session back to defaults, consistent with each other.
+
+Note: KV entries are written with `DEFAULT_DEVICE` on reset (not deleted) — an explicit value is easier to debug in the KV dashboard than a missing key.
+
+---
+
+## New infrastructure
+
+### Cloudflare KV namespace: `catt_bff_kv`
+
+Stores the active device key for every session-based caller. Must be created in the Cloudflare dashboard before deploying.
+
+| KV key | Example key | Example value | Set when | First-time fallback |
+|---|---|---|---|---|
+| `telegram:<chatId>` | `telegram:12345` | `"k"` | Telegram user sends a bare device alias | `DEFAULT_DEVICE` |
+| `slack:all` | `slack:all` | `"o"` | Slack user sends a bare device alias | `DEFAULT_DEVICE` |
+| `googlehome:all` | `googlehome:all` | `"b"` | Google Home executes `SetInput`, `NextInput`, or `PreviousInput` | `DEFAULT_DEVICE` |
+| `ui:kids` | `ui:kids` | `"k"` | Kids UI sends `{ command: "device", value: "k" }` | `DEFAULT_DEVICE` |
+| `ui:admin` | `ui:admin` | `"otv"` | Admin UI sends `{ command: "device", value: "k" }` | `DEFAULT_DEVICE` |
+| `http:<caller>` | `http:api-client-1` | `"zbk"` | Raw HTTP POST sends `{ command: "device", value: "zbk", caller: "api-client-1" }` | `DEFAULT_DEVICE` |
+
+TTL: none (persists until overwritten). All KV entries are created lazily on first device selection — until then every caller falls back to `DEFAULT_DEVICE` (`"o"`).
+
+Slack uses a single shared key because Slack slash commands have no per-user session — all Slack users share one active device, consistent with current behaviour.
+
+Raw HTTP POST callers may include a `caller` string in the request body. If `caller` is absent, it defaults to `"default"`, mapping to KV key `http:default`. Each named caller (e.g. `"api-client-1"`) gets its own session stored at KV key `http:<caller>`. Sending `{ command: "device", value: "k", caller: "api-client-1" }` persists `"k"` for that caller; subsequent requests with the same `caller` route to `"k"` without needing to repeat `device`. Callerless requests all share the `http:default` session — if two distinct callerless clients run simultaneously they will clobber each other's device session, which is an accepted trade-off for a personal project.
+
+When `body.device` is present on a `cast` command alongside `caller`, the device is resolved and the KV session is updated — matching current behaviour where `cast` with a device implicitly sets the active device. `device: "queue"` is treated as a reserved value that bypasses device resolution and queues to the caller's current session device.
+
+---
+
+## Caller identification for UI callers
+
+The Kids UI and Admin UI both call `POST /catt` through Cloudflare Pages Functions. Since `index.ts` cannot distinguish them by route alone (both hit the same BFF endpoint with the same API key), the Pages Function proxies add a caller header:
+
+- Kids UI Pages Function adds `X-Caller: kids`
+- Admin UI Pages Function adds `X-Caller: admin`
+
+`index.ts` reads this header to determine which KV key to use for routing and for updating the session device on a `device` command.
+
+Raw HTTP POST callers (no `X-Caller` header) may include a `caller` field in the body. If absent, `caller` defaults to `"default"`, routing to the `http:default` shared session.
+
+### Role guard decision for `functions/api/command.ts`
+
+Currently `functions/api/command.ts` guards with `["kids", "admin"]` — both roles can call it. Since it will now add `X-Caller: kids`, an admin user hitting this endpoint would be routed to the `kids` DO. This is incorrect.
+
+**Decision:** Change the guard to `["kids"]` only. Admin users must use `functions/api/admin/command.ts`. This is also a security improvement — it removes the ability for an admin session to silently mutate the kids DO's device via the wrong endpoint.
+
+---
+
+## File-by-file changes
+
+### `catt_bff/wrangler.toml`
+
+Add KV namespace binding:
+
+```toml
+[[kv_namespaces]]
+binding = "DEVICE_SESSION"
+id = "<kv-namespace-id>"
+preview_id = "<kv-namespace-preview-id>"
+```
+
+### `catt_bff/worker-configuration.d.ts` (auto-generated via `npm run cf-typegen`)
+
+After adding the binding above, regenerate to get `DEVICE_SESSION: KVNamespace` in the `Env` interface.
+
+### `catt_bff/src/devices.ts`
+
+Add a helper that returns all known device keys — used by the `scheduled` handler to reset every DO:
+
+```ts
+export function getAllDeviceKeys(deviceId: string): string[] {
+  for (const d of DEVICES) {
+    if (d.id !== deviceId) continue;
+    return (d.attributes.availableInputs as Array<{ key: string }>).map(i => i.key);
+  }
+  return [];
+}
+```
+
+### `catt_bff/src/index.ts`
+
+**Helper: resolve device key from KV session**
+
+```ts
+async function getSessionDeviceKey(env: Env, sessionKey: string): Promise<string> {
+  return await env.DEVICE_SESSION.get(sessionKey) ?? DEFAULT_DEVICE;
+}
+
+function getDoStubForDevice(env: Env, deviceKey: string): DurableObjectStub {
+  return getDoStub(env, deviceKey);
+}
+```
+
+**`/catt` route** — caller-aware DO resolution:
+
+```
+X-Caller: kids  → deviceKey = await getSessionDeviceKey(env, "ui:kids")
+X-Caller: admin → deviceKey = await getSessionDeviceKey(env, "ui:admin")
+no X-Caller, body.caller present → deviceKey = await getSessionDeviceKey(env, "http:<caller>")
+no X-Caller, no body.caller     → deviceKey = await getSessionDeviceKey(env, "http:default")
+```
+
+For all paths, `doStub = getDoStubForDevice(env, deviceKey)`.
+
+**Device resolution for all session callers (`ui:kids`, `ui:admin`, `http:<caller>`):**
+
+- `command: "device"` — resolve `body.value` via `getInputKey`; write to KV; route to new device DO.
+- `command: "cast"` with `body.device` present and not `"queue"` — resolve `body.device` via `getInputKey`; if valid, update KV session and use as `deviceKey`. Matches current behaviour where cast with a device implicitly sets the active device.
+- `body.device = "queue"` — skip device resolution; use current KV session device; pass `device: "queue"` through to `cattHandler` unchanged so it queues without casting immediately.
+- `command: "reset"` — after routing to DO, reset KV session: `await env.DEVICE_SESSION.put(sessionKey, DEFAULT_DEVICE)`.
+- `command: "clear"` — KV session unchanged.
+
+```ts
+const isQueueDevice = body.device === "queue";
+const resolvedKey = isQueueDevice ? null : getInputKey(DEVICE_ID, body.device ?? body.value, null);
+if (resolvedKey) await env.DEVICE_SESSION.put(sessionKey, resolvedKey);
+deviceKey = resolvedKey ?? deviceKey;
+// after dispatching to DO:
+if (body.command === "reset") await env.DEVICE_SESSION.put(sessionKey, DEFAULT_DEVICE);
+```
+
+**`/slack` route:**
+```
+POST /slack
+  → deviceKey = await getSessionDeviceKey(env, "slack:all")
+  → doStub = getDoStubForDevice(env, deviceKey)
+  → pass doStub + env.DEVICE_SESSION to handleSlack
+```
+
+**`/telegram` route:**
+```
+POST /telegram
+  → pass env + env.DEVICE_SESSION to handleTelegram (do NOT parse body here)
+  → handleTelegram parses body once, reads chatId, calls
+    env.DEVICE_SESSION.get("telegram:<chatId>") to get deviceKey,
+    then constructs its own doStub via getDoStub(env, deviceKey)
+```
+
+`handleTelegram` must import `getDoStub` or receive a factory — the DO stub is resolved internally after the body is parsed, not passed in from `index.ts`. This avoids parsing the body twice.
+
+**`/fulfillment` (Google Home) route:**
+```
+POST /fulfillment
+  → deviceKey = await getSessionDeviceKey(env, "googlehome:all")
+  → doStub = getDoStubForDevice(env, deviceKey)
+  → pass doStub + deviceKey + env to handleFulfillment
+```
+
+`deviceKey` is passed explicitly so `handleFulfillment` can forward it to `handleQuery` and `handleExecute` without re-reading KV.
+
+**`/device/*` route:**
+```
+GET /device/box/state
+  → xcaller = request.headers.get("X-Caller") ?? "admin"
+  → sessionKey = xcaller === "kids" ? "ui:kids" : "ui:admin"
+  → deviceKey = await getSessionDeviceKey(env, sessionKey)
+  → stub = getDoStubForDevice(env, deviceKey)
+  → stub.fetch(request)
+```
+Same applies to `/device/box/history` and any other `/device/box/*` sub-routes. The URL path (`box`) is ignored — the DO is selected by caller session.
+
+**`scheduled` handler** — reset all device DOs:
+
+```ts
+async scheduled(_event, env) {
+  for (const key of getAllDeviceKeys(DEVICE_ID)) {
+    const stub = getDoStub(env, key);
+    await stub.fetch(new Request("https://do/device/box/clear"));
+    await stub.fetch(new Request("https://do/device/box/set/app/" + DEFAULT_APP));
+  }
+}
+```
+
+### `catt_bff/src/googleHome.ts`
+
+**Call chain change:** `handleFulfillment` receives `deviceKey: string` and `env: Env` as additional parameters (both passed from `index.ts`). It forwards `deviceKey` to both `handleQuery` and `handleExecute`.
+
+**`handleQuery`** — use `deviceKey` param instead of reading from DO state:
+
+```ts
+// Before
+const inputKey = String(doSt.device ?? DEFAULT_DEVICE);
+
+// After
+const inputKey = deviceKey; // passed down from handleFulfillment
+```
+
+**`SetInput`** — write to KV instead of DO:
+
+```ts
+// Before
+await doGet(stub, "/set/device/" + key);
+
+// After
+await env.DEVICE_SESSION.put("googlehome:all", key);
+// stub is already pointing to the new DO — caller must re-route next request via KV
+```
+
+**`NextInput` / `PreviousInput`** — use `deviceKey` param, write result to KV:
+
+```ts
+// Before
+const key = getAdjacentInput(DEVICE_ID, inputKey, delta);
+await doGet(stub, "/set/device/" + key);
+
+// After
+const key = getAdjacentInput(DEVICE_ID, deviceKey, delta);
+await env.DEVICE_SESSION.put("googlehome:all", key);
+```
+
+**`OnOff on`** — reset KV session alongside DO reset:
+
+```ts
+// After existing: await doGet(stub, "/reset");
+await env.DEVICE_SESSION.put("googlehome:all", DEFAULT_DEVICE);
+```
+
+**`OnOff off`** — KV session unchanged; only the DO state is wiped:
+
+All other GH commands (`play`, `stop`, `volume`, `channel`, `shuffle`, etc.) are unaffected — they operate on the stub already resolved at routing time.
+
+### `catt_bff/src/integrations.ts`
+
+**`handleTelegram`** — three changes:
+
+1. Accept `env: Env` (already has it for `CATT_AI`, `CATT_BACKEND_URL`, etc.) — confirm `DEVICE_SESSION` is accessible via `env`.
+2. After parsing the body and extracting `chatId`, resolve the DO stub internally:
+   ```ts
+   const deviceKey = await env.DEVICE_SESSION.get(`telegram:${chatId}`) ?? DEFAULT_DEVICE;
+   const doStub = getDoStub(env, deviceKey); // imported from index or a shared helper
+   ```
+3. On bare device alias (`command in INPUT_TO_DEVICE`), write to KV:
+   ```ts
+   const resolvedKey = INPUT_TO_DEVICE[command]; // already a known key
+   await env.DEVICE_SESSION.put(`telegram:${chatId}`, resolvedKey);
+   ```
+4. On `reset`, reset KV session:
+   ```ts
+   await env.DEVICE_SESSION.put(`telegram:${chatId}`, DEFAULT_DEVICE);
+   ```
+
+`handleTelegram` signature changes from receiving a pre-built `doStub` to building its own stub after body parse. `index.ts` no longer calls `getDoStub` before `handleTelegram` — it just passes `env`.
+
+**`handleSlack`** — three changes:
+
+1. Accept `deviceSession: KVNamespace` as an additional parameter (or use `env.DEVICE_SESSION` if `env` is passed).
+2. On bare device alias, write to KV:
+   ```ts
+   await deviceSession.put("slack:all", resolvedKey);
+   ```
+3. On `reset`, reset KV session:
+   ```ts
+   await deviceSession.put("slack:all", DEFAULT_DEVICE);
+   ```
+
+The `doStub` for Slack is still resolved in `index.ts` before calling `handleSlack` (Slack body is a URL-encoded form, not JSON — no double-parse concern).
+
+### `catt_frontend/functions/api/command.ts` (Kids UI)
+
+Two changes:
+
+1. Change cookie guard from `["kids", "admin"]` to `["kids"]` only.
+2. Add `X-Caller: kids` header:
+
+```ts
+headers: { "Content-Type": "application/json", "X-API-Key": env.CATT_API_KEY, "X-Caller": "kids" }
+```
+
+### `catt_frontend/functions/api/admin/command.ts` (Admin UI)
+
+Add `X-Caller: admin` header:
+
+```ts
+headers: { "Content-Type": "application/json", "X-API-Key": env.CATT_API_KEY, "X-Caller": "admin" }
+```
+
+### `catt_frontend/functions/api/state.ts` (Kids UI state polling)
+
+Add `X-Caller: kids` header:
+
+```ts
+headers: { "X-API-Key": env.CATT_API_KEY, "X-Caller": "kids" }
+```
+
+### `catt_frontend/functions/api/admin/state.ts` (Admin UI state polling)
+
+Add `X-Caller: admin` header to both BFF calls:
+
+```ts
+headers: { "X-API-Key": env.CATT_API_KEY, "X-Caller": "admin" }
+```
+
+### `catt_bff/src/index.ts` — `device` field in state response
+
+`getState()` in `DeviceQueue.ts` returns `device: this.get("device")` which is vestigial after this change. The `device` field in the state response will always hold the stale default, not the true active device. The Kids UI (`app.html:217`) and Admin UI (`admin/app.html:179`) both read `state.device` to highlight the active device button.
+
+**Fix:** In the `/device/*` handler in `index.ts`, after receiving the state response from the DO, inject the correct `device` key before returning:
+
+```ts
+const state = await res.json() as Record<string, unknown>;
+return Response.json({ ...state, device: deviceKey });
+```
+
+Since `device` is removed from `DeviceQueue.ts` as part of this plan, `getState()` will no longer return a `device` field at all — making the injection in `index.ts` the sole source of the `device` field in all state responses.
+
+### `catt_bff/src/cattHandler.ts`
+
+Accept `deviceKey: string` as an additional parameter alongside `doStub`. Use it directly for `volume` instead of reading `state.device` from the DO:
+
+```ts
+// Before
+const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
+const state = await stateRes.json() as { device?: string };
+const resolvedDevice = resolveDevice(state.device ?? "");
+
+// After
+const resolvedDevice = resolveDevice(deviceKey); // passed from index.ts — no DO read needed
+```
+
+### `catt_bff/src/DeviceQueue.ts`
+
+Remove the `device` KV key — it is fully vestigial after this plan:
+
+- Remove from `defaultFor()` — no longer initialised on DO creation
+- Remove from `clearState()` — no longer reset on clear
+- Remove from the `reset` route — no longer reset on full reset
+- Remove from the `set/device` initialisation call
+- Remove from `getState()` return object — `index.ts` injects the correct value from `catt_bff_kv` instead
+
+---
+
+## Device name resolution
+
+All forms resolve to the same DO:
+
+```
+"Mini Kitchen"  →  getInputKey → "k"   →  getDoStub(env, "k")
+"kitchen"       →  getInputKey → "k"   →  getDoStub(env, "k")
+"k"             →  getInputKey → "k"   →  getDoStub(env, "k")
+"OTV"           →  getInputKey → "otv" →  getDoStub(env, "otv")
+```
+
+If `body.device` is absent or unresolvable (raw HTTP POST path), falls back to `DEFAULT_DEVICE` (`"o"`).
+
+---
+
+## Session flow after change
+
+### Telegram
+
+```
+User sends: "kitchen"
+  → handleTelegram parses body, chatId = 12345
+  → DEVICE_SESSION.get("telegram:12345") = null → DEFAULT_DEVICE = "o" (first time)
+  → command in INPUT_TO_DEVICE → resolvedKey = "k"
+  → DEVICE_SESSION.put("telegram:12345", "k")
+  → doStub = getDoStub(env, "k") → dispatch
+
+User sends: "channel up"
+  → handleTelegram parses body, chatId = 12345
+  → DEVICE_SESSION.get("telegram:12345") = "k" → doStub = getDoStub(env, "k")
+  → channel up dispatched to "k" DO
+```
+
+### Google Home
+
+```
+User says: "switch to kitchen"
+  → index.ts: deviceKey = "o" (from KV), doStub = getDoStub(env, "o")
+  → SetInput → resolvedKey = "k"
+  → DEVICE_SESSION.put("googlehome:all", "k")
+  (note: current request still uses "o" stub — next request picks up "k")
+
+User says: "play"
+  → index.ts: DEVICE_SESSION.get("googlehome:all") = "k" → doStub = getDoStub(env, "k")
+  → play dispatched to "k" DO
+```
+
+### Kids UI
+
+```
+User taps "Kitchen" device button
+  → POST /catt { command: "device", value: "k" } with X-Caller: kids
+  → index.ts: DEVICE_SESSION.put("ui:kids", "k"), route command to "k" DO
+
+User taps "Play"
+  → POST /catt { command: "play" } with X-Caller: kids
+  → index.ts: DEVICE_SESSION.get("ui:kids") = "k" → getDoStub(env, "k")
+  → play dispatched to "k" DO
+
+State poll (GET /device/box/state with X-Caller: kids)
+  → index.ts: DEVICE_SESSION.get("ui:kids") = "k" → getDoStub(env, "k")
+  → state returned with device: "k" injected
+  → UI highlights Kitchen button correctly
+```
+
+### Shared queue example
+
+```
+Google Home: "switch to kitchen" → DEVICE_SESSION: googlehome:all = "k"
+Kids UI: taps Kitchen → DEVICE_SESSION: kids = "k"
+Kids UI: enqueues video → "k" DO queue
+Google Home: "next" → "k" DO advances — plays the Kids UI's queued item
+```
+
+---
+
+## The `"box"` DO
+
+Retired. No code routes to `getDoStub(env, "box")` after this change. Any existing data in `"box"` (queue, history, kv) is abandoned — acceptable since queue data is ephemeral. The `DEVICE_ID = "box"` constant is kept as Google Home's external identifier only.
+
+---
+
+## Migration / rollout notes
+
+- Create `catt_bff_kv` namespace in Cloudflare dashboard. Add its ID and preview ID to `wrangler.toml` before deploying.
+- At rollout, all per-device DOs start fresh (empty queue, default state). No data migration from `"box"`.
+- `DEVICE_SESSION` KV entries are written on first device switch — until then, all callers default to `DEFAULT_DEVICE` (`"o"`).
+
+---
+
+## Test changes required
+
+### `catt_bff` tests
+
+**`src/tests/index.test.ts`**
+- Add `DEVICE_SESSION: { get: vi.fn(async () => null), put: vi.fn() }` to `makeEnv()`
+- Add tests: `/catt` with `X-Caller: kids` routes to `ui:kids` session; `/catt` with `X-Caller: admin` routes to `ui:admin` session; `/catt` with no `X-Caller` and no `body.caller` falls back to `http:default` session; `/catt` with no `X-Caller` and `body.caller` reads from `http:<caller>` KV key; `device` command with `body.caller` writes to `http:<caller>` KV key; `cast` with `body.device` and `body.caller` updates KV session; `cast` with `body.device: "queue"` uses session device without updating KV; `/device/box/state` with `X-Caller: kids` reads `ui:kids` session; state response has `device` field injected from KV not DO
+
+**`src/tests/integrations.test.ts`**
+- Add `DEVICE_SESSION: { get: vi.fn(async () => null), put: vi.fn() }` to `makeEnv()`
+- `handleTelegram` no longer receives a pre-built `doStub` — update all test call sites
+- Add tests: Telegram device alias writes to `DEVICE_SESSION`; subsequent command reads from `DEVICE_SESSION`; Slack device alias writes to `DEVICE_SESSION`
+
+**`src/tests/googleHome.test.ts`**
+- `handleFulfillment` signature gains `deviceKey` and updated `env` — update all test call sites
+- Add tests: `SetInput` writes to `DEVICE_SESSION` not DO; `NextInput`/`PreviousInput` write to `DEVICE_SESSION`; `handleQuery` uses passed `deviceKey` not `doSt.device`
+
+### `catt_frontend` tests
+
+**`src/tests/command.test.ts`**
+- `POST /api/command` — add test asserting `X-Caller: kids` header is sent to BFF
+- `POST /api/command` — add test asserting admin cookie now returns 401 (role guard tightened to kids-only)
+- `POST /api/admin/command` — add test asserting `X-Caller: admin` header is sent to BFF
+- `GET /api/state` — add test asserting `X-Caller: kids` header is sent to BFF
+- `GET /api/admin/state` — add test asserting `X-Caller: admin` header is sent to both BFF calls
+
+---
+
+## Summary of files changed
+
+### `catt_bff`
+
+| File | Nature of change |
+|---|---|
+| `wrangler.toml` | Add `DEVICE_SESSION` KV binding |
+| `worker-configuration.d.ts` | Regenerate to add `DEVICE_SESSION: KVNamespace` to `Env` |
+| `src/devices.ts` | Add `getAllDeviceKeys()` helper |
+| `src/index.ts` | Per-route DO resolution via KV or body.device; X-Caller handling; device injection in state response; update `scheduled` handler |
+| `src/googleHome.ts` | Accept `deviceKey` + `env` params; read/write device via KV |
+| `src/integrations.ts` | `handleTelegram` resolves own DO stub after body parse; both handlers write to KV on device alias |
+| `src/cattHandler.ts` | Accept `deviceKey` param; use it directly for volume instead of reading `state.device` from DO |
+| `src/DeviceQueue.ts` | Remove `device` KV key from `defaultFor()`, `clearState()`, `reset` route, and `set/device` initialisation call |
+| `src/catt.ts` | No changes |
+| `src/urlHelper.ts` | No changes |
+| `src/oauth.ts` | No changes |
+
+### `catt_frontend`
+
+| File | Nature of change |
+|---|---|
+| `functions/api/command.ts` | Tighten guard to `["kids"]`; add `X-Caller: kids` header |
+| `functions/api/admin/command.ts` | Add `X-Caller: admin` header |
+| `functions/api/state.ts` | Add `X-Caller: kids` header |
+| `functions/api/admin/state.ts` | Add `X-Caller: admin` header to both BFF calls |
+
+---
+
+## What is explicitly out of scope
+
+- Migrating existing `"box"` DO history or queue data
+- Per-user Slack sessions (one shared Slack device is consistent with current behaviour)
+
+---
+
+## Future cleanup (post-ship)
+
+No deferred cleanup items — all KV key removals are handled within this plan.
