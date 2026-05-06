@@ -79,3 +79,61 @@ describe("handleFulfillment — mediaStop", () => {
     expect(urls.some(u => u.includes("/off"))).toBe(false);
   });
 });
+
+describe("handleFulfillment — KV session", () => {
+  it("SetInput writes new device key to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.SetInput", { newInput: "k" }), env, stub, "o");
+    expect(kvPut).toHaveBeenCalledWith("googlehome:all", "k");
+  });
+
+  it("NextInput writes adjacent device key to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.NextInput"), env, stub, "k");
+    expect(kvPut).toHaveBeenCalledWith("googlehome:all", expect.any(String));
+  });
+
+  it("PreviousInput writes adjacent device key to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.PreviousInput"), env, stub, "k");
+    expect(kvPut).toHaveBeenCalledWith("googlehome:all", expect.any(String));
+  });
+
+  it("OnOff on writes DEFAULT_DEVICE to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.OnOff", { on: true }), env, stub, "k");
+    expect(kvPut).toHaveBeenCalledWith("googlehome:all", "o");
+  });
+
+  it("OnOff off does NOT write to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.OnOff", { on: false }), env, stub, "k");
+    expect(kvPut).not.toHaveBeenCalled();
+  });
+
+  it("handleQuery uses passed deviceKey not DO state", async () => {
+    const stub = makeDoStub();
+    const req = new Request("https://bff.example.com/fulfillment", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        requestId: "test-req",
+        inputs: [{ intent: "action.devices.QUERY", payload: { devices: [{ id: "box" }] } }],
+      }),
+    });
+    const res = await handleFulfillment(req, makeEnv(), stub, "otv");
+    const body = await res.json() as Record<string, unknown>;
+    const states = (body.payload as Record<string, unknown>).devices as Record<string, unknown>;
+    expect((states["box"] as Record<string, unknown>).currentInput).toBe("otv");
+  });
+});

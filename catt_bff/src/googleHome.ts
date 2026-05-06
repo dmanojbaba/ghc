@@ -38,13 +38,14 @@ export async function handleQuery(
   requestId: string,
   payload: { devices: Array<{ id: string }> },
   stub: DurableObjectStub,
+  deviceKey = DEFAULT_DEVICE,
 ): Promise<Record<string, unknown>> {
   const states: Record<string, unknown> = {};
 
   for (const device of payload.devices) {
     if (device.id === DEVICE_ID) {
       const doSt      = await doState(stub);
-      const inputKey  = String(doSt.device ?? DEFAULT_DEVICE);
+      const inputKey  = deviceKey;
 
       states[device.id] = {
         online:              true,
@@ -75,6 +76,7 @@ async function handleExecute(
   },
   stub: DurableObjectStub,
   env: Env,
+  deviceKey = DEFAULT_DEVICE,
 ): Promise<Record<string, unknown>> {
   const results: unknown[] = [];
 
@@ -84,8 +86,7 @@ async function handleExecute(
         results.push({ ids: [device.id], status: "SUCCESS", states: { online: true } });
         continue;
       }
-      const doSt = await doState(stub);
-      const inputKey   = String(doSt.device ?? DEFAULT_DEVICE);
+      const inputKey   = deviceKey;
       const cattDevice = INPUT_TO_DEVICE[inputKey] ?? inputKey;
 
       for (const exec of cmd.execution) {
@@ -96,6 +97,7 @@ async function handleExecute(
         if (command === "action.devices.commands.OnOff") {
           if (params.on) {
             await doGet(stub, "/reset");
+            await env.CALLER_KV.put("googlehome:all", DEFAULT_DEVICE);
             result = {
               status: "SUCCESS",
               states: {
@@ -121,7 +123,7 @@ async function handleExecute(
         } else if (command === "action.devices.commands.SetInput") {
           const newInput = String(params.newInput);
           const key      = getInputKey(DEVICE_ID, newInput, null) ?? newInput;
-          await doGet(stub, "/set/device/" + key);
+          await env.CALLER_KV.put("googlehome:all", key);
           const updatedSt = await doState(stub);
           const newApp    = String(updatedSt.app ?? DEFAULT_APP);
           result = {
@@ -140,7 +142,7 @@ async function handleExecute(
         ) {
           const delta  = command === "action.devices.commands.NextInput" ? 1 : -1;
           const key    = getAdjacentInput(DEVICE_ID, inputKey, delta);
-          await doGet(stub, "/set/device/" + key);
+          await env.CALLER_KV.put("googlehome:all", key);
           const updatedSt = await doState(stub);
           const newApp    = String(updatedSt.app ?? DEFAULT_APP);
           result = {
@@ -256,7 +258,7 @@ async function handleExecute(
   return { requestId, payload: { commands: results } };
 }
 
-export async function handleFulfillment(request: Request, env: Env, stub: DurableObjectStub): Promise<Response> {
+export async function handleFulfillment(request: Request, env: Env, stub: DurableObjectStub, deviceKey = DEFAULT_DEVICE): Promise<Response> {
   const body      = await request.json() as {
     requestId: string;
     inputs: Array<{ intent: string; payload?: unknown }>;
@@ -271,9 +273,9 @@ export async function handleFulfillment(request: Request, env: Env, stub: Durabl
     } else if (input.intent === "action.devices.DISCONNECT") {
       return Response.json({});
     } else if (input.intent === "action.devices.QUERY") {
-      result = await handleQuery(requestId, input.payload as Parameters<typeof handleQuery>[1], stub);
+      result = await handleQuery(requestId, input.payload as Parameters<typeof handleQuery>[1], stub, deviceKey);
     } else if (input.intent === "action.devices.EXECUTE") {
-      result = await handleExecute(requestId, input.payload as Parameters<typeof handleExecute>[1], stub, env);
+      result = await handleExecute(requestId, input.payload as Parameters<typeof handleExecute>[1], stub, env, deviceKey);
     }
   }
 

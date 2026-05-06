@@ -1,5 +1,10 @@
 import { castCommand } from "./catt";
-import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, getDeviceList, getChannelList, getChannelListWithSynonyms, DEVICE_ID } from "./devices";
+import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, getDeviceList, getChannelList, getChannelListWithSynonyms, DEVICE_ID, DEFAULT_DEVICE } from "./devices";
+
+function getDoStub(env: Env, deviceKey: string): DurableObjectStub {
+  const id = env.DEVICE_QUEUE.idFromName(deviceKey);
+  return env.DEVICE_QUEUE.get(id);
+}
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 
@@ -64,13 +69,7 @@ async function dispatchCommand(
   }
   if (command === "volume") {
     const val = rawValue.trim();
-    let deviceKey = device;
-    if (!deviceKey) {
-      const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
-      const state = await stateRes.json() as { device?: string };
-      deviceKey = state.device ?? "";
-    }
-    const resolvedDevice = resolveDevice(deviceKey);
+    const resolvedDevice = resolveDevice(device);
     if (val === "up" || val === "down") {
       await castCommand(env.CATT_BACKEND_URL, resolvedDevice, `volume${val}`, undefined, undefined, env.CATT_BACKEND_SECRET);
     } else {
@@ -226,7 +225,8 @@ async function verifySlackSignature(request: Request, env: Env, body: string): P
   return computed === signature;
 }
 
-export async function handleSlack(request: Request, env: Env, ctx: ExecutionContext, doStub: DurableObjectStub): Promise<Response> {
+export async function handleSlack(request: Request, env: Env, ctx: ExecutionContext, doStubParam: DurableObjectStub, sessionDeviceKey = ""): Promise<Response> {
+  let doStub = doStubParam;
   const body   = await request.text();
   if (!await verifySlackSignature(request, env, body)) {
     return new Response("Unauthorized", { status: 401 });
@@ -256,6 +256,9 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
   }
 
   if (command in INPUT_TO_DEVICE) {
+    const resolvedKey = INPUT_TO_DEVICE[command];
+    await env.CALLER_KV.put("slack:all", resolvedKey);
+    doStub = getDoStub(env, resolvedKey);
     await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(command)}`));
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
     const json = truncateStateQueue(await res.json() as Record<string, unknown>);
@@ -266,12 +269,13 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
 
   if (command === "device" || command === "clear" || command === "reset") {
     await dispatchCommand(command, device, rawValue, env, doStub);
+    if (command === "reset") await env.CALLER_KV.put("slack:all", DEFAULT_DEVICE);
     const res  = await doStub.fetch(new Request("https://do/device/box/state"));
     const json = truncateStateQueue(await res.json() as Record<string, unknown>);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
-  ctx.waitUntil(dispatchCommand(command, device, rawValue, env, doStub));
+  ctx.waitUntil(dispatchCommand(command, device || sessionDeviceKey, rawValue, env, doStub));
   return new Response(command, { status: 200 });
 }
 
@@ -307,7 +311,7 @@ async function sendTelegramMessage(token: string, chatId: number, text: string, 
   });
 }
 
-export async function handleTelegram(request: Request, env: Env, doStub: DurableObjectStub): Promise<Response> {
+export async function handleTelegram(request: Request, env: Env): Promise<Response> {
   if (!verifyTelegramSecret(request, env)) return Response.json({}, { status: 401 });
 
   const body    = await request.json() as { message?: { text?: string; chat?: { id: number } } };
@@ -318,6 +322,10 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
     const allowed = env.TELEGRAM_ALLOWED_CHAT_IDS.split(",").map((s) => s.trim());
     if (!chatId || !allowed.includes(String(chatId))) return Response.json({});
   }
+
+  const sessionKey = `telegram:${chatId}`;
+  const deviceKey = (await env.CALLER_KV.get(sessionKey)) ?? DEFAULT_DEVICE;
+  let doStub = getDoStub(env, deviceKey);
 
   const tokens  = text.split(/\s+/);
 
@@ -345,6 +353,9 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
   }
 
   if (command in INPUT_TO_DEVICE) {
+    const resolvedKey = INPUT_TO_DEVICE[command];
+    await env.CALLER_KV.put(sessionKey, resolvedKey);
+    doStub = getDoStub(env, resolvedKey);
     await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(command)}`));
     if (chatId && env.TELEGRAM_BOT_TOKEN) {
       const res  = await doStub.fetch(new Request("https://do/device/box/state"));
@@ -384,9 +395,7 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
         if (parsed.value) confirmLines.push(`value: ${parsed.value}`);
       }
       if (chatId && env.TELEGRAM_BOT_TOKEN) {
-        const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
-        const state = await stateRes.json() as { device?: string };
-        confirmLines.push(`device: ${state.device ?? ""}`);
+        confirmLines.push(`device: ${deviceKey}`);
         await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, confirmLines.join("\n"));
       }
     } catch {
@@ -399,6 +408,7 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
 
   try {
     await dispatchCommand(command, device, rawValue, env, doStub);
+    if (command === "reset") await env.CALLER_KV.put(sessionKey, DEFAULT_DEVICE);
     if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset" || command === "device")) {
       const res  = await doStub.fetch(new Request("https://do/device/box/state"));
       const json = truncateStateQueue(await res.json() as Record<string, unknown>);

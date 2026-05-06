@@ -595,7 +595,7 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 6. Update `OnOff on` — reset KV session after DO reset
 7. Update `src/tests/integrations.test.ts` and `src/tests/googleHome.test.ts` (see test changes section)
 8. Run `npm test` — all tests must pass
-**Status**: Not Started
+**Status**: Complete
 
 ---
 

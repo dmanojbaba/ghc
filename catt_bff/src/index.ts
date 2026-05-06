@@ -50,7 +50,7 @@ export default {
     // Google Home fulfillment
     if (path === "/fulfillment" && method === "POST") {
       const deviceKey = await getSessionDeviceKey(env, "googlehome:all");
-      return handleFulfillment(request, env, getDoStub(env, deviceKey));
+      return handleFulfillment(request, env, getDoStub(env, deviceKey), deviceKey);
     }
 
     // Debug: verify SYNC response without going through Google
@@ -107,12 +107,12 @@ export default {
     // Slack
     if (path === "/slack" && method === "POST") {
       const deviceKey = await getSessionDeviceKey(env, "slack:all");
-      return handleSlack(request, env, ctx, getDoStub(env, deviceKey));
+      return handleSlack(request, env, ctx, getDoStub(env, deviceKey), deviceKey);
     }
 
     // Telegram
     if (path === "/telegram" && method === "POST") {
-      return handleTelegram(request, env, getDoStub(env, DEVICE_ID));
+      return handleTelegram(request, env);
     }
 
     // Echo — renders TTS text as HTML for cast_site
