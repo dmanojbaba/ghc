@@ -49,7 +49,6 @@ export class DeviceQueue implements DurableObject {
     const defaults: Record<string, string> = {
       app:      DEFAULT_APP,
       channel:  DEFAULT_CHANNEL,
-      device:   DEFAULT_DEVICE,
       next:     DEFAULT_NEXT,
       playlist: DEFAULT_PLAYLIST,
       prev:     DEFAULT_PREV,
@@ -294,7 +293,6 @@ export class DeviceQueue implements DurableObject {
     const sleepAt = this.get("sleep_at");
 
     return {
-      device:    this.get("device"),
       app:       this.get("app"),
       session:   this.get("session"),
       alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
@@ -350,8 +348,7 @@ export class DeviceQueue implements DurableObject {
 
       case "reset":
         await this.clearState();
-        this.set("device", DEFAULT_DEVICE);
-        this.set("app",    DEFAULT_APP);
+        this.set("app", DEFAULT_APP);
         return new Response("ok");
 
       case "cast": {

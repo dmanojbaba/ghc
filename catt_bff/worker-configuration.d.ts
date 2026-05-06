@@ -4,6 +4,7 @@ interface Env {
   CATT_BACKEND_URL: string;
   CATT_AI: Ai;
   DEVICE_QUEUE: DurableObjectNamespace;
+  CALLER_KV: KVNamespace;
   SLACK_SIGNING_SECRET: string;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_ALLOWED_CHAT_IDS: string;

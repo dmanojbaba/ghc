@@ -129,14 +129,14 @@ Add KV namespace binding:
 
 ```toml
 [[kv_namespaces]]
-binding = "DEVICE_SESSION"
+binding = "CALLER_KV"
 id = "<kv-namespace-id>"
 preview_id = "<kv-namespace-preview-id>"
 ```
 
 ### `catt_bff/worker-configuration.d.ts` (auto-generated via `npm run cf-typegen`)
 
-After adding the binding above, regenerate to get `DEVICE_SESSION: KVNamespace` in the `Env` interface.
+After adding the binding above, regenerate to get `CALLER_KV: KVNamespace` in the `Env` interface.
 
 ### `catt_bff/src/devices.ts`
 
@@ -158,7 +158,7 @@ export function getAllDeviceKeys(deviceId: string): string[] {
 
 ```ts
 async function getSessionDeviceKey(env: Env, sessionKey: string): Promise<string> {
-  return await env.DEVICE_SESSION.get(sessionKey) ?? DEFAULT_DEVICE;
+  return await env.CALLER_KV.get(sessionKey) ?? DEFAULT_DEVICE;
 }
 
 function getDoStubForDevice(env: Env, deviceKey: string): DurableObjectStub {
@@ -182,16 +182,16 @@ For all paths, `doStub = getDoStubForDevice(env, deviceKey)`.
 - `command: "device"` — resolve `body.value` via `getInputKey`; write to KV; route to new device DO.
 - `command: "cast"` with `body.device` present and not `"queue"` — resolve `body.device` via `getInputKey`; if valid, update KV session and use as `deviceKey`. Matches current behaviour where cast with a device implicitly sets the active device.
 - `body.device = "queue"` — skip device resolution; use current KV session device; pass `device: "queue"` through to `cattHandler` unchanged so it queues without casting immediately.
-- `command: "reset"` — after routing to DO, reset KV session: `await env.DEVICE_SESSION.put(sessionKey, DEFAULT_DEVICE)`.
+- `command: "reset"` — after routing to DO, reset KV session: `await env.CALLER_KV.put(sessionKey, DEFAULT_DEVICE)`.
 - `command: "clear"` — KV session unchanged.
 
 ```ts
 const isQueueDevice = body.device === "queue";
 const resolvedKey = isQueueDevice ? null : getInputKey(DEVICE_ID, body.device ?? body.value, null);
-if (resolvedKey) await env.DEVICE_SESSION.put(sessionKey, resolvedKey);
+if (resolvedKey) await env.CALLER_KV.put(sessionKey, resolvedKey);
 deviceKey = resolvedKey ?? deviceKey;
 // after dispatching to DO:
-if (body.command === "reset") await env.DEVICE_SESSION.put(sessionKey, DEFAULT_DEVICE);
+if (body.command === "reset") await env.CALLER_KV.put(sessionKey, DEFAULT_DEVICE);
 ```
 
 **`/slack` route:**
@@ -199,15 +199,15 @@ if (body.command === "reset") await env.DEVICE_SESSION.put(sessionKey, DEFAULT_D
 POST /slack
   → deviceKey = await getSessionDeviceKey(env, "slack:all")
   → doStub = getDoStubForDevice(env, deviceKey)
-  → pass doStub + env.DEVICE_SESSION to handleSlack
+  → pass doStub + env.CALLER_KV to handleSlack
 ```
 
 **`/telegram` route:**
 ```
 POST /telegram
-  → pass env + env.DEVICE_SESSION to handleTelegram (do NOT parse body here)
+  → pass env + env.CALLER_KV to handleTelegram (do NOT parse body here)
   → handleTelegram parses body once, reads chatId, calls
-    env.DEVICE_SESSION.get("telegram:<chatId>") to get deviceKey,
+    env.CALLER_KV.get("telegram:<chatId>") to get deviceKey,
     then constructs its own doStub via getDoStub(env, deviceKey)
 ```
 
@@ -267,7 +267,7 @@ const inputKey = deviceKey; // passed down from handleFulfillment
 await doGet(stub, "/set/device/" + key);
 
 // After
-await env.DEVICE_SESSION.put("googlehome:all", key);
+await env.CALLER_KV.put("googlehome:all", key);
 // stub is already pointing to the new DO — caller must re-route next request via KV
 ```
 
@@ -280,14 +280,14 @@ await doGet(stub, "/set/device/" + key);
 
 // After
 const key = getAdjacentInput(DEVICE_ID, deviceKey, delta);
-await env.DEVICE_SESSION.put("googlehome:all", key);
+await env.CALLER_KV.put("googlehome:all", key);
 ```
 
 **`OnOff on`** — reset KV session alongside DO reset:
 
 ```ts
 // After existing: await doGet(stub, "/reset");
-await env.DEVICE_SESSION.put("googlehome:all", DEFAULT_DEVICE);
+await env.CALLER_KV.put("googlehome:all", DEFAULT_DEVICE);
 ```
 
 **`OnOff off`** — KV session unchanged; only the DO state is wiped:
@@ -298,27 +298,27 @@ All other GH commands (`play`, `stop`, `volume`, `channel`, `shuffle`, etc.) are
 
 **`handleTelegram`** — three changes:
 
-1. Accept `env: Env` (already has it for `CATT_AI`, `CATT_BACKEND_URL`, etc.) — confirm `DEVICE_SESSION` is accessible via `env`.
+1. Accept `env: Env` (already has it for `CATT_AI`, `CATT_BACKEND_URL`, etc.) — confirm `CALLER_KV` is accessible via `env`.
 2. After parsing the body and extracting `chatId`, resolve the DO stub internally:
    ```ts
-   const deviceKey = await env.DEVICE_SESSION.get(`telegram:${chatId}`) ?? DEFAULT_DEVICE;
+   const deviceKey = await env.CALLER_KV.get(`telegram:${chatId}`) ?? DEFAULT_DEVICE;
    const doStub = getDoStub(env, deviceKey); // imported from index or a shared helper
    ```
 3. On bare device alias (`command in INPUT_TO_DEVICE`), write to KV:
    ```ts
    const resolvedKey = INPUT_TO_DEVICE[command]; // already a known key
-   await env.DEVICE_SESSION.put(`telegram:${chatId}`, resolvedKey);
+   await env.CALLER_KV.put(`telegram:${chatId}`, resolvedKey);
    ```
 4. On `reset`, reset KV session:
    ```ts
-   await env.DEVICE_SESSION.put(`telegram:${chatId}`, DEFAULT_DEVICE);
+   await env.CALLER_KV.put(`telegram:${chatId}`, DEFAULT_DEVICE);
    ```
 
 `handleTelegram` signature changes from receiving a pre-built `doStub` to building its own stub after body parse. `index.ts` no longer calls `getDoStub` before `handleTelegram` — it just passes `env`.
 
 **`handleSlack`** — three changes:
 
-1. Accept `deviceSession: KVNamespace` as an additional parameter (or use `env.DEVICE_SESSION` if `env` is passed).
+1. Accept `deviceSession: KVNamespace` as an additional parameter (or use `env.CALLER_KV` if `env` is passed).
 2. On bare device alias, write to KV:
    ```ts
    await deviceSession.put("slack:all", resolvedKey);
@@ -426,14 +426,14 @@ If `body.device` is absent or unresolvable (raw HTTP POST path), falls back to `
 ```
 User sends: "kitchen"
   → handleTelegram parses body, chatId = 12345
-  → DEVICE_SESSION.get("telegram:12345") = null → DEFAULT_DEVICE = "o" (first time)
+  → CALLER_KV.get("telegram:12345") = null → DEFAULT_DEVICE = "o" (first time)
   → command in INPUT_TO_DEVICE → resolvedKey = "k"
-  → DEVICE_SESSION.put("telegram:12345", "k")
+  → CALLER_KV.put("telegram:12345", "k")
   → doStub = getDoStub(env, "k") → dispatch
 
 User sends: "channel up"
   → handleTelegram parses body, chatId = 12345
-  → DEVICE_SESSION.get("telegram:12345") = "k" → doStub = getDoStub(env, "k")
+  → CALLER_KV.get("telegram:12345") = "k" → doStub = getDoStub(env, "k")
   → channel up dispatched to "k" DO
 ```
 
@@ -443,11 +443,11 @@ User sends: "channel up"
 User says: "switch to kitchen"
   → index.ts: deviceKey = "o" (from KV), doStub = getDoStub(env, "o")
   → SetInput → resolvedKey = "k"
-  → DEVICE_SESSION.put("googlehome:all", "k")
+  → CALLER_KV.put("googlehome:all", "k")
   (note: current request still uses "o" stub — next request picks up "k")
 
 User says: "play"
-  → index.ts: DEVICE_SESSION.get("googlehome:all") = "k" → doStub = getDoStub(env, "k")
+  → index.ts: CALLER_KV.get("googlehome:all") = "k" → doStub = getDoStub(env, "k")
   → play dispatched to "k" DO
 ```
 
@@ -456,15 +456,15 @@ User says: "play"
 ```
 User taps "Kitchen" device button
   → POST /catt { command: "device", value: "k" } with X-Caller: kids
-  → index.ts: DEVICE_SESSION.put("ui:kids", "k"), route command to "k" DO
+  → index.ts: CALLER_KV.put("ui:kids", "k"), route command to "k" DO
 
 User taps "Play"
   → POST /catt { command: "play" } with X-Caller: kids
-  → index.ts: DEVICE_SESSION.get("ui:kids") = "k" → getDoStub(env, "k")
+  → index.ts: CALLER_KV.get("ui:kids") = "k" → getDoStub(env, "k")
   → play dispatched to "k" DO
 
 State poll (GET /device/box/state with X-Caller: kids)
-  → index.ts: DEVICE_SESSION.get("ui:kids") = "k" → getDoStub(env, "k")
+  → index.ts: CALLER_KV.get("ui:kids") = "k" → getDoStub(env, "k")
   → state returned with device: "k" injected
   → UI highlights Kitchen button correctly
 ```
@@ -472,8 +472,8 @@ State poll (GET /device/box/state with X-Caller: kids)
 ### Shared queue example
 
 ```
-Google Home: "switch to kitchen" → DEVICE_SESSION: googlehome:all = "k"
-Kids UI: taps Kitchen → DEVICE_SESSION: kids = "k"
+Google Home: "switch to kitchen" → CALLER_KV: googlehome:all = "k"
+Kids UI: taps Kitchen → CALLER_KV: kids = "k"
 Kids UI: enqueues video → "k" DO queue
 Google Home: "next" → "k" DO advances — plays the Kids UI's queued item
 ```
@@ -490,7 +490,7 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 
 - Create `catt-bff-kv` namespace in Cloudflare dashboard. Add its ID and preview ID to `wrangler.toml` before deploying.
 - At rollout, all per-device DOs start fresh (empty queue, default state). No data migration from `"box"`.
-- `DEVICE_SESSION` KV entries are written on first device switch — until then, all callers default to `DEFAULT_DEVICE` (`"o"`).
+- `CALLER_KV` KV entries are written on first device switch — until then, all callers default to `DEFAULT_DEVICE` (`"o"`).
 
 ---
 
@@ -499,17 +499,17 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 ### `catt_bff` tests
 
 **`src/tests/index.test.ts`**
-- Add `DEVICE_SESSION: { get: vi.fn(async () => null), put: vi.fn() }` to `makeEnv()`
+- Add `CALLER_KV: { get: vi.fn(async () => null), put: vi.fn() }` to `makeEnv()`
 - Add tests: `/catt` with `X-Caller: kids` routes to `ui:kids` session; `/catt` with `X-Caller: admin` routes to `ui:admin` session; `/catt` with no `X-Caller` and no `body.caller` falls back to `http:default` session; `/catt` with no `X-Caller` and `body.caller` reads from `http:<caller>` KV key; `device` command with `body.caller` writes to `http:<caller>` KV key; `cast` with `body.device` and `body.caller` updates KV session; `cast` with `body.device: "queue"` uses session device without updating KV; `/device/box/state` with `X-Caller: kids` reads `ui:kids` session; state response has `device` field injected from KV not DO
 
 **`src/tests/integrations.test.ts`**
-- Add `DEVICE_SESSION: { get: vi.fn(async () => null), put: vi.fn() }` to `makeEnv()`
+- Add `CALLER_KV: { get: vi.fn(async () => null), put: vi.fn() }` to `makeEnv()`
 - `handleTelegram` no longer receives a pre-built `doStub` — update all test call sites
-- Add tests: Telegram device alias writes to `DEVICE_SESSION`; subsequent command reads from `DEVICE_SESSION`; Slack device alias writes to `DEVICE_SESSION`
+- Add tests: Telegram device alias writes to `CALLER_KV`; subsequent command reads from `CALLER_KV`; Slack device alias writes to `CALLER_KV`
 
 **`src/tests/googleHome.test.ts`**
 - `handleFulfillment` signature gains `deviceKey` and updated `env` — update all test call sites
-- Add tests: `SetInput` writes to `DEVICE_SESSION` not DO; `NextInput`/`PreviousInput` write to `DEVICE_SESSION`; `handleQuery` uses passed `deviceKey` not `doSt.device`
+- Add tests: `SetInput` writes to `CALLER_KV` not DO; `NextInput`/`PreviousInput` write to `CALLER_KV`; `handleQuery` uses passed `deviceKey` not `doSt.device`
 
 ### `catt_frontend` tests
 
@@ -528,8 +528,8 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 
 | File | Nature of change |
 |---|---|
-| `wrangler.toml` | Add `DEVICE_SESSION` KV binding |
-| `worker-configuration.d.ts` | Regenerate to add `DEVICE_SESSION: KVNamespace` to `Env` |
+| `wrangler.toml` | Add `CALLER_KV` KV binding |
+| `worker-configuration.d.ts` | Regenerate to add `CALLER_KV: KVNamespace` to `Env` |
 | `src/devices.ts` | Add `getAllDeviceKeys()` helper |
 | `src/index.ts` | Per-route DO resolution via KV or body.device; X-Caller handling; device injection in state response; update `scheduled` handler |
 | `src/googleHome.ts` | Accept `deviceKey` + `env` params; read/write device via KV |
@@ -557,13 +557,13 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 **Goal**: KV namespace wired up, `device` key removed from DO, baseline tests still passing.
 **Files**: `wrangler.toml`, `worker-configuration.d.ts`, `src/devices.ts`, `src/DeviceQueue.ts`
 **Steps**:
-1. Add `DEVICE_SESSION` KV binding to `wrangler.toml`
+1. Add `CALLER_KV` KV binding to `wrangler.toml`
 2. Run `npm run cf-typegen` to regenerate `worker-configuration.d.ts`
 3. Add `getAllDeviceKeys()` to `src/devices.ts`
 4. Remove `device` KV key from `DeviceQueue.ts` (`defaultFor()`, `clearState()`, `reset` route, `set/device` initialisation call, `getState()` return)
-5. Add `DEVICE_SESSION: { get: vi.fn(async () => null), put: vi.fn() }` to `makeEnv()` in all test files
+5. Add `CALLER_KV: { get: vi.fn(async () => null), put: vi.fn() }` to `makeEnv()` in all test files
 6. Run `npm test` — all existing tests must pass
-**Status**: Not Started
+**Status**: Complete
 
 ---
 

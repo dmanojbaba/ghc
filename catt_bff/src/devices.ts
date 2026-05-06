@@ -158,6 +158,14 @@ export const DEFAULT_PLAYLIST = "PLT26XfDyh_oQqoekQItn1eAFqpiWgJQSk";
 export const DEFAULT_SLEEP_AT = "";
 export const DEFAULT_VOLUME = 10;
 
+export function getAllDeviceKeys(deviceId: string): string[] {
+  for (const d of DEVICES) {
+    if (d.id !== deviceId) continue;
+    return (d.attributes.availableInputs as Array<{ key: string }>).map((i) => i.key);
+  }
+  return [];
+}
+
 export function resolveDevice(input: string): string {
   return INPUT_TO_DEVICE[input] ?? input;
 }

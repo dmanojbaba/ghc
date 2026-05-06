@@ -17,6 +17,7 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
       idFromName: () => ({} as DurableObjectId),
       get: () => ({ fetch: vi.fn(async () => new Response("ok")) } as unknown as DurableObjectStub),
     } as unknown as DurableObjectNamespace,
+    CALLER_KV: { get: vi.fn(async () => null), put: vi.fn() } as unknown as KVNamespace,
     ...overrides,
   };
 }

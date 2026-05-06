@@ -14,6 +14,7 @@ function makeEnv(): Env {
     YOUTUBE_API_KEY: "",
     REDIRECT_URL: process.env.REDIRECT_URL!,
     DEVICE_QUEUE: {} as DurableObjectNamespace,
+    CALLER_KV: { get: vi.fn(async () => null), put: vi.fn() } as unknown as KVNamespace,
   };
 }
 
