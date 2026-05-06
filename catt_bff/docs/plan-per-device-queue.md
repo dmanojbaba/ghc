@@ -2,7 +2,7 @@
 
 ## Goal
 
-Each physical Chromecast device gets its own isolated Durable Object instance — its own queue, history, alarm, sleep timer, and playback state. All callers (Telegram, Slack, Google Home, Kids UI, Admin UI, HTTP POST) store their active device in a single Cloudflare KV namespace (`catt_bff_kv`) and route to the correct per-device DO. All callers sharing the same physical device see the same queue.
+Each physical Chromecast device gets its own isolated Durable Object instance — its own queue, history, alarm, sleep timer, and playback state. All callers (Telegram, Slack, Google Home, Kids UI, Admin UI, HTTP POST) store their active device in a single Cloudflare KV namespace (`catt-bff-kv`) and route to the correct per-device DO. All callers sharing the same physical device see the same queue.
 
 ---
 
@@ -17,17 +17,17 @@ All callers share a single Durable Object keyed `"box"`. The active device is st
 ```
 Caller              Active device source              DO instance
 ──────────────────  ──────────────────────────────    ───────────
-Telegram (chatId)   catt_bff_kv: telegram:<chatId>   "k", "o", "b", etc.
-Slack               catt_bff_kv: slack:all            "k", "o", "b", etc.
-Google Home         catt_bff_kv: googlehome:all           "k", "o", "b", etc.
-Kids UI             catt_bff_kv: ui:kids              "k", "o", "b", etc.
-Admin UI            catt_bff_kv: ui:admin             "k", "o", "b", etc.
+Telegram (chatId)   catt-bff-kv: telegram:<chatId>   "k", "o", "b", etc.
+Slack               catt-bff-kv: slack:all            "k", "o", "b", etc.
+Google Home         catt-bff-kv: googlehome:all           "k", "o", "b", etc.
+Kids UI             catt-bff-kv: ui:kids              "k", "o", "b", etc.
+Admin UI            catt-bff-kv: ui:admin             "k", "o", "b", etc.
 HTTP POST (raw)     body.device (stateless) OR        "k", "o", "b", etc.
-                    catt_bff_kv: http:<caller>
+                    catt-bff-kv: http:<caller>
 scheduled handler   all known device keys             one reset per DO
 ```
 
-`catt_bff_kv` is the single source of truth for session device across all callers. Per-device DOs (`"k"`, `"o"`, `"b"`, `"zbk"`, `"tv"`, `"otv"`) are the single source of truth for queue, history, and playback state. The `"box"` DO is retired.
+`catt-bff-kv` is the single source of truth for session device across all callers. Per-device DOs (`"k"`, `"o"`, `"b"`, `"zbk"`, `"tv"`, `"otv"`) are the single source of truth for queue, history, and playback state. The `"box"` DO is retired.
 
 ### Key benefit: shared queue across callers
 
@@ -56,7 +56,7 @@ Two callers targeting the same physical Chromecast simultaneously (e.g. Telegram
 
 With one DO per physical device, the `device` KV becomes fully vestigial — the routing layer always selects the correct DO before any command reaches it, and `deviceKey` is passed explicitly to `cattHandler` so volume no longer reads it either. The `device` KV key is removed from `DeviceQueue.ts` as part of this plan (not deferred).
 
-### `catt_bff_kv` session reset behaviour
+### `catt-bff-kv` session reset behaviour
 
 On `reset`, each caller's KV session entry is reset to `DEFAULT_DEVICE` (`"o"`). Only the sending caller's entry is affected — all other callers are completely isolated.
 
@@ -79,7 +79,7 @@ Note: KV entries are written with `DEFAULT_DEVICE` on reset (not deleted) — an
 
 ## New infrastructure
 
-### Cloudflare KV namespace: `catt_bff_kv`
+### Cloudflare KV namespace: `catt-bff-kv`
 
 Stores the active device key for every session-based caller. Must be created in the Cloudflare dashboard before deploying.
 
@@ -373,7 +373,7 @@ headers: { "X-API-Key": env.CATT_API_KEY, "X-Caller": "admin" }
 
 ```ts
 const state = await res.json() as Record<string, unknown>;
-return Response.json({ ...state, device: deviceKey });
+return Response.json({ device: deviceKey, ...state });
 ```
 
 Since `device` is removed from `DeviceQueue.ts` as part of this plan, `getState()` will no longer return a `device` field at all — making the injection in `index.ts` the sole source of the `device` field in all state responses.
@@ -400,7 +400,7 @@ Remove the `device` KV key — it is fully vestigial after this plan:
 - Remove from `clearState()` — no longer reset on clear
 - Remove from the `reset` route — no longer reset on full reset
 - Remove from the `set/device` initialisation call
-- Remove from `getState()` return object — `index.ts` injects the correct value from `catt_bff_kv` instead
+- Remove from `getState()` return object — `index.ts` injects the correct value from `catt-bff-kv` instead
 
 ---
 
@@ -488,7 +488,7 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 
 ## Migration / rollout notes
 
-- Create `catt_bff_kv` namespace in Cloudflare dashboard. Add its ID and preview ID to `wrangler.toml` before deploying.
+- Create `catt-bff-kv` namespace in Cloudflare dashboard. Add its ID and preview ID to `wrangler.toml` before deploying.
 - At rollout, all per-device DOs start fresh (empty queue, default state). No data migration from `"box"`.
 - `DEVICE_SESSION` KV entries are written on first device switch — until then, all callers default to `DEFAULT_DEVICE` (`"o"`).
 
@@ -584,7 +584,7 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 ---
 
 ### Stage 3: Integrations + Google Home
-**Goal**: Telegram, Slack, and Google Home all read/write device via `catt_bff_kv`.
+**Goal**: Telegram, Slack, and Google Home all read/write device via `catt-bff-kv`.
 **Files**: `src/integrations.ts`, `src/googleHome.ts`
 **Steps**:
 1. Update `handleTelegram` — remove pre-built `doStub` param; resolve DO stub internally after body parse; write KV on device alias; reset KV on `reset`
