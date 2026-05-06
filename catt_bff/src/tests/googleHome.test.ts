@@ -14,6 +14,7 @@ function makeEnv(): Env {
     YOUTUBE_API_KEY: "",
     REDIRECT_URL: process.env.REDIRECT_URL!,
     DEVICE_QUEUE: {} as DurableObjectNamespace,
+    CALLER_KV: { get: vi.fn(async () => null), put: vi.fn() } as unknown as KVNamespace,
   };
 }
 
@@ -76,5 +77,131 @@ describe("handleFulfillment — mediaStop", () => {
     const urls = getUrls(stub);
     expect(urls.some(u => u.includes("/stop"))).toBe(true);
     expect(urls.some(u => u.includes("/off"))).toBe(false);
+  });
+});
+
+describe("handleFulfillment — channel commands", () => {
+  it("selectChannel routes to /channel/<key>", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.selectChannel", { channelCode: "ping" }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/channel/ping"))).toBe(true);
+  });
+
+  it("relativeChannel with positive delta routes to /channel/up", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.relativeChannel", { relativeChannelChange: 1 }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/channel/up"))).toBe(true);
+  });
+
+  it("relativeChannel with negative delta routes to /channel/down", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.relativeChannel", { relativeChannelChange: -1 }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/channel/down"))).toBe(true);
+  });
+});
+
+describe("handleFulfillment — mute", () => {
+  it("mute routes to /mute/true through DO", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mute", { mute: true }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/mute/true"))).toBe(true);
+  });
+
+  it("unmute routes to /mute/false through DO", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mute", { mute: false }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/mute/false"))).toBe(true);
+  });
+});
+
+describe("handleFulfillment — seek", () => {
+  it("mediaSeekRelative with positive ms routes to /ffwd/<seconds>", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mediaSeekRelative", { relativePositionMs: 30000 }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/ffwd/"))).toBe(true);
+  });
+
+  it("mediaSeekRelative with negative ms routes to /rewind/<seconds>", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mediaSeekRelative", { relativePositionMs: -30000 }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/rewind/"))).toBe(true);
+  });
+});
+
+describe("handleFulfillment — prev and next", () => {
+  it("mediaPrevious routes to /prev", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mediaPrevious"), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/prev"))).toBe(true);
+  });
+
+  it("returnChannel routes to /prev", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.returnChannel"), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/prev"))).toBe(true);
+  });
+
+  it("mediaNext routes to /next", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mediaNext"), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/next"))).toBe(true);
+  });
+});
+
+describe("handleFulfillment — KV session", () => {
+  it("SetInput writes new device key to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.SetInput", { newInput: "k" }), env, stub, "o");
+    expect(kvPut).toHaveBeenCalledWith("googlehome:all", "k");
+  });
+
+  it("NextInput writes adjacent device key to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.NextInput"), env, stub, "k");
+    expect(kvPut).toHaveBeenCalledWith("googlehome:all", expect.any(String));
+  });
+
+  it("PreviousInput writes adjacent device key to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.PreviousInput"), env, stub, "k");
+    expect(kvPut).toHaveBeenCalledWith("googlehome:all", expect.any(String));
+  });
+
+  it("OnOff on writes DEFAULT_DEVICE to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.OnOff", { on: true }), env, stub, "k");
+    expect(kvPut).toHaveBeenCalledWith("googlehome:all", "o");
+  });
+
+  it("OnOff off does NOT write to CALLER_KV", async () => {
+    const kvPut = vi.fn();
+    const env = { ...makeEnv(), CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace };
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.OnOff", { on: false }), env, stub, "k");
+    expect(kvPut).not.toHaveBeenCalled();
+  });
+
+  it("handleQuery uses passed deviceKey not DO state", async () => {
+    const stub = makeDoStub();
+    const req = new Request("https://bff.example.com/fulfillment", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        requestId: "test-req",
+        inputs: [{ intent: "action.devices.QUERY", payload: { devices: [{ id: "box" }] } }],
+      }),
+    });
+    const res = await handleFulfillment(req, makeEnv(), stub, "otv");
+    const body = await res.json() as Record<string, unknown>;
+    const states = (body.payload as Record<string, unknown>).devices as Record<string, unknown>;
+    expect((states["box"] as Record<string, unknown>).currentInput).toBe("otv");
   });
 });

@@ -329,7 +329,7 @@ Required GitHub secrets: `CLOUDFLARE_API_TOKEN`
 ### Stage 8: Admin-managed favourites
 **Goal**: Allow admin to edit kids and admin favourite buttons from the admin UI instead of Cloudflare dashboard
 **Implementation**:
-- Add a Cloudflare KV namespace (`GHA_BUTTONS`) with two keys: `kids_buttons` and `admin_buttons`
+- Add a Cloudflare KV namespace (`catt-frontend-kv`) with two keys: `kids_buttons` and `admin_buttons`
 - `GET /api/config` reads `kids_buttons` from KV first, falls back to `BUTTONS_CONFIG` env var
 - `POST /api/admin/buttons` accepts `{ role: "kids" | "admin", buttons: [...] }` and writes to the appropriate KV key (admin cookie required)
 - Kids view (`/app`): renders preset buttons from `kids_buttons` (unchanged UX)

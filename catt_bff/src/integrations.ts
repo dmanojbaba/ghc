@@ -1,11 +1,17 @@
 import { castCommand } from "./catt";
-import { resolveDevice, INPUT_TO_DEVICE, getChannelKey, getDeviceList, getChannelList, getChannelListWithSynonyms, DEVICE_ID } from "./devices";
+import { resolveDevice, INPUT_TO_DEVICE, getInputKey, getChannelKey, getDeviceList, getChannelList, getChannelListWithSynonyms, DEVICE_ID, DEFAULT_DEVICE } from "./devices";
+
+function getDoStub(env: Env, deviceKey: string): DurableObjectStub {
+  const id = env.DEVICE_QUEUE.idFromName(deviceKey);
+  return env.DEVICE_QUEUE.get(id);
+}
 
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 
 const HELP_TEXT = `Commands: <command> [device] [value]
 cast [device] [url]   – cast URL (omit for next)
-tts/speak/talk [text] – speak text
+queue [device] [url]  – add URL to queue (starts if idle, appends if busy)
+tts/broadcast/speak/talk [text] – speak text
 volume [device] <n>   – set volume 0–100
 volume up/down        – step volume
 mute / unmute         – mute toggle
@@ -21,7 +27,7 @@ sleep <minutes>       – sleep timer
 sleep cancel          – cancel sleep timer
 channel up/down       – next/previous channel
 channel <name>        – switch to named channel
-device <key>          – set active device
+device <key>          – switch session to device
 playlist              – replay active playlist from start
 state                 – show device state
 history               – show playback history
@@ -37,40 +43,39 @@ function parseTokens(tokens: string[]): { device: string; rawValue: string } {
 }
 
 
+function doUrl(deviceKey: string, path: string): string {
+  return `https://do/device/${deviceKey}${path}`;
+}
+
 async function dispatchCommand(
   command: string,
   device: string,
   rawValue: string,
   env: Env,
   doStub: DurableObjectStub,
+  sessionDeviceKey: string,
 ): Promise<string> {
   if (DO_COMMANDS.has(command)) {
-    await doStub.fetch(new Request(`https://do/device/box/${command}`));
+    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/${command}`)));
     return command;
   }
   if (command === "rewind" || command === "ffwd") {
     const seconds = rawValue.trim() || device;
-    await doStub.fetch(new Request(`https://do/device/box/${command}/${encodeURIComponent(seconds)}`));
+    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/${command}/${encodeURIComponent(seconds)}`)));
     return command;
   }
   if (command === "sleep") {
     const arg = rawValue.trim() || device;
-    await doStub.fetch(new Request(`https://do/device/box/sleep/${encodeURIComponent(arg)}`));
+    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/sleep/${encodeURIComponent(arg)}`)));
     return "sleep";
   }
-  if (command === "tts" || command === "speak" || command === "talk") {
-    await doStub.fetch(new Request(`https://do/device/box/site/${encodeURIComponent(rawValue)}`));
+  if (command === "tts" || command === "broadcast" || command === "speak" || command === "talk") {
+    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/site/${encodeURIComponent(rawValue)}`)));
     return "tts";
   }
   if (command === "volume") {
     const val = rawValue.trim();
-    let deviceKey = device;
-    if (!deviceKey) {
-      const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
-      const state = await stateRes.json() as { device?: string };
-      deviceKey = state.device ?? "";
-    }
-    const resolvedDevice = resolveDevice(deviceKey);
+    const resolvedDevice = resolveDevice(command === "volume" ? (device || sessionDeviceKey) : device);
     if (val === "up" || val === "down") {
       await castCommand(env.CATT_BACKEND_URL, resolvedDevice, `volume${val}`, undefined, undefined, env.CATT_BACKEND_SECRET);
     } else {
@@ -78,41 +83,46 @@ async function dispatchCommand(
     }
     return "volume";
   }
-  if (command === "device") {
-    const key = rawValue.trim() || device;
-    await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(key)}`));
-    return "device";
-  }
   if (command === "channel") {
     const arg = rawValue.trim() || device;
-    await doStub.fetch(new Request(`https://do/device/box/channel/${encodeURIComponent(arg)}`));
+    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/channel/${encodeURIComponent(arg)}`)));
     return "channel";
   }
   if (command === "playlist") {
-    if (device) await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(device)}`));
     if (rawValue) {
-      await doStub.fetch(new Request("https://do/device/box/catt", {
+      await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/catt"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ command: "cast", device, value: rawValue }),
+        body: JSON.stringify({ command: "cast", value: rawValue }),
       }));
     } else {
-      await doStub.fetch(new Request("https://do/device/box/shuffle"));
+      await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/shuffle")));
     }
     return "playlist";
   }
   if (command === "mute") {
     const muted = (rawValue.trim() || "true") !== "false";
-    await doStub.fetch(new Request(`https://do/device/box/mute/${muted}`));
+    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/mute/${muted}`)));
     return "mute";
   }
+  if (command === "queue") {
+    const targetKey = device && device in INPUT_TO_DEVICE ? (getInputKey(DEVICE_ID, device, null) ?? sessionDeviceKey) : sessionDeviceKey;
+    const targetStub = targetKey !== sessionDeviceKey ? getDoStub(env, targetKey) : doStub;
+    await targetStub.fetch(new Request(doUrl(targetKey, "/enqueue"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: rawValue.trim() }),
+    }));
+    return "queue";
+  }
+
   const val = rawValue.trim();
   const channelKey = val && !val.startsWith("http") ? getChannelKey(DEVICE_ID, val) : null;
   if (channelKey) {
-    await doStub.fetch(new Request(`https://do/device/box/channel/${encodeURIComponent(channelKey)}`));
+    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/channel/${encodeURIComponent(channelKey)}`)));
     return "channel";
   }
-  await doStub.fetch(new Request("https://do/device/box/catt", {
+  await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/catt"), {
     method: "POST",
     body: JSON.stringify({ command: "cast", device, value: val }),
   }));
@@ -120,7 +130,7 @@ async function dispatchCommand(
 }
 
 const KNOWN_COMMANDS = new Set([
-  "cast", "tts", "speak", "talk", "volume", "mute", "unmute", "play", "stop",
+  "cast", "queue", "tts", "broadcast", "speak", "talk", "volume", "mute", "unmute", "play", "stop",
   "clear", "reset", "prev", "next", "rewind", "ffwd", "sleep", "channel", "device", "playlist", "state", "history", "help", "start",
 ]);
 
@@ -142,7 +152,7 @@ Return ONLY valid JSON — either a single command object or an array of command
 Each object has this shape: {"command":"...","device":"...","value":"..."}
 device and value are optional strings.
 
-Valid commands: cast, tts, volume, mute, unmute, play, stop, clear, reset, prev, next, rewind, ffwd, sleep, channel, device, playlist, state, help
+Valid commands: cast, queue, tts, broadcast, speak, talk, volume, mute, unmute, play, stop, clear, reset, prev, next, rewind, ffwd, sleep, channel, device, playlist, state, help
 
 Valid device keys (use the key, not the name): ${devices}
 
@@ -172,6 +182,10 @@ Examples:
   "hello play radio chennai"   -> {"command":"channel","value":"chennai"}
   "replay my playlist"         -> {"command":"playlist"}
   "please play my playlist"    -> {"command":"playlist"}
+  "add kids rhymes to queue"   -> {"command":"queue","value":"kids rhymes"}
+  "add jazz music to office queue" -> {"command":"queue","device":"o","value":"jazz music"}
+  "add radio lime to mini office queue" -> {"command":"queue","device":"o","value":"lime"}
+  "add believer to kitchen queue" -> {"command":"queue","device":"k","value":"believer"}
   "play radio lime for 30 minutes"       -> [{"command":"channel","value":"lime"},{"command":"sleep","value":"30"}]
   "please play channel 6 for 1 hour"    -> [{"command":"channel","value":"chennai"},{"command":"sleep","value":"60"}]
 
@@ -226,7 +240,8 @@ async function verifySlackSignature(request: Request, env: Env, body: string): P
   return computed === signature;
 }
 
-export async function handleSlack(request: Request, env: Env, ctx: ExecutionContext, doStub: DurableObjectStub): Promise<Response> {
+export async function handleSlack(request: Request, env: Env, ctx: ExecutionContext, doStubParam: DurableObjectStub, sessionDeviceKey = ""): Promise<Response> {
+  let doStub = doStubParam;
   const body   = await request.text();
   if (!await verifySlackSignature(request, env, body)) {
     return new Response("Unauthorized", { status: 401 });
@@ -244,34 +259,47 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
   }
 
   if (command === "state") {
-    const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+    const res  = await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/state")));
     const json = truncateStateQueue(await res.json() as Record<string, unknown>);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
   if (command === "history") {
-    const res   = await doStub.fetch(new Request("https://do/device/box/history"));
+    const res   = await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/history")));
     const items = truncateHistory(await res.json() as unknown[]);
     return new Response("```\n" + JSON.stringify(items, null, 2) + "\n```", { status: 200 });
   }
 
   if (command in INPUT_TO_DEVICE) {
-    await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(command)}`));
-    const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+    const inputKey = getInputKey(DEVICE_ID, command, null) ?? command;
+    await env.CALLER_KV.put("slack:all", inputKey);
+    doStub = getDoStub(env, inputKey);
+    const res  = await doStub.fetch(new Request(doUrl(inputKey, "/state")));
     const json = truncateStateQueue(await res.json() as Record<string, unknown>);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
   const { device, rawValue } = parseTokens(rest);
 
-  if (command === "device" || command === "clear" || command === "reset") {
-    await dispatchCommand(command, device, rawValue, env, doStub);
-    const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+  if (command === "device") {
+    const resolvedKey = getInputKey(DEVICE_ID, rawValue || device, null);
+    if (!resolvedKey) return new Response("Unknown device", { status: 200 });
+    await env.CALLER_KV.put("slack:all", resolvedKey);
+    doStub = getDoStub(env, resolvedKey);
+    const res  = await doStub.fetch(new Request(doUrl(resolvedKey, "/state")));
     const json = truncateStateQueue(await res.json() as Record<string, unknown>);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
-  ctx.waitUntil(dispatchCommand(command, device, rawValue, env, doStub));
+  if (command === "clear" || command === "reset") {
+    await dispatchCommand(command, device, rawValue, env, doStub, sessionDeviceKey);
+    if (command === "reset") await env.CALLER_KV.put("slack:all", DEFAULT_DEVICE);
+    const res  = await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/state")));
+    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+    return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
+  }
+
+  ctx.waitUntil(dispatchCommand(command, device, rawValue, env, doStub, sessionDeviceKey));
   return new Response(command, { status: 200 });
 }
 
@@ -307,7 +335,7 @@ async function sendTelegramMessage(token: string, chatId: number, text: string, 
   });
 }
 
-export async function handleTelegram(request: Request, env: Env, doStub: DurableObjectStub): Promise<Response> {
+export async function handleTelegram(request: Request, env: Env): Promise<Response> {
   if (!verifyTelegramSecret(request, env)) return Response.json({}, { status: 401 });
 
   const body    = await request.json() as { message?: { text?: string; chat?: { id: number } } };
@@ -318,6 +346,10 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
     const allowed = env.TELEGRAM_ALLOWED_CHAT_IDS.split(",").map((s) => s.trim());
     if (!chatId || !allowed.includes(String(chatId))) return Response.json({});
   }
+
+  const sessionKey = `telegram:${chatId}`;
+  const deviceKey = (await env.CALLER_KV.get(sessionKey)) ?? DEFAULT_DEVICE;
+  let doStub = getDoStub(env, deviceKey);
 
   const tokens  = text.split(/\s+/);
 
@@ -331,13 +363,13 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
       return Response.json({});
     }
     if (command === "state") {
-      const res   = await doStub.fetch(new Request("https://do/device/box/state"));
+      const res   = await doStub.fetch(new Request(doUrl(deviceKey, "/state")));
       const json  = truncateStateQueue(await res.json() as Record<string, unknown>);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
       return Response.json({});
     }
     if (command === "history") {
-      const res   = await doStub.fetch(new Request("https://do/device/box/history"));
+      const res   = await doStub.fetch(new Request(doUrl(deviceKey, "/history")));
       const items = truncateHistory(await res.json() as unknown[]);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(items, null, 2), true);
       return Response.json({});
@@ -345,9 +377,11 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
   }
 
   if (command in INPUT_TO_DEVICE) {
-    await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(command)}`));
+    const inputKey = getInputKey(DEVICE_ID, command, null) ?? command;
+    await env.CALLER_KV.put(sessionKey, inputKey);
+    doStub = getDoStub(env, inputKey);
     if (chatId && env.TELEGRAM_BOT_TOKEN) {
-      const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+      const res  = await doStub.fetch(new Request(doUrl(inputKey, "/state")));
       const json = truncateStateQueue(await res.json() as Record<string, unknown>);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
     }
@@ -376,17 +410,12 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
     try {
       const confirmLines: string[] = [];
       for (const parsed of parsedList) {
-        if (parsed.device && parsed.device in INPUT_TO_DEVICE) {
-          await doStub.fetch(new Request(`https://do/device/box/set/device/${encodeURIComponent(parsed.device)}`));
-        }
-        const dispatched = await dispatchCommand(parsed.command, parsed.device ?? "", parsed.value ?? "", env, doStub);
+        const dispatched = await dispatchCommand(parsed.command, parsed.device ?? "", parsed.value ?? "", env, doStub, deviceKey);
         confirmLines.push(`command: ${dispatched}`);
         if (parsed.value) confirmLines.push(`value: ${parsed.value}`);
       }
       if (chatId && env.TELEGRAM_BOT_TOKEN) {
-        const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
-        const state = await stateRes.json() as { device?: string };
-        confirmLines.push(`device: ${state.device ?? ""}`);
+        confirmLines.push(`device: ${deviceKey}`);
         await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, confirmLines.join("\n"));
       }
     } catch {
@@ -397,10 +426,29 @@ export async function handleTelegram(request: Request, env: Env, doStub: Durable
     return Response.json({});
   }
 
+  if (command === "device") {
+    const resolvedKey = getInputKey(DEVICE_ID, rawValue || device, null);
+    if (!resolvedKey) {
+      if (chatId && env.TELEGRAM_BOT_TOKEN) {
+        await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, "Unknown device");
+      }
+      return Response.json({});
+    }
+    await env.CALLER_KV.put(sessionKey, resolvedKey);
+    doStub = getDoStub(env, resolvedKey);
+    if (chatId && env.TELEGRAM_BOT_TOKEN) {
+      const res  = await doStub.fetch(new Request(doUrl(resolvedKey, "/state")));
+      const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+      await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
+    }
+    return Response.json({});
+  }
+
   try {
-    await dispatchCommand(command, device, rawValue, env, doStub);
-    if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset" || command === "device")) {
-      const res  = await doStub.fetch(new Request("https://do/device/box/state"));
+    await dispatchCommand(command, device, rawValue, env, doStub, deviceKey);
+    if (command === "reset") await env.CALLER_KV.put(sessionKey, DEFAULT_DEVICE);
+    if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset")) {
+      const res  = await doStub.fetch(new Request(doUrl(deviceKey, "/state")));
       const json = truncateStateQueue(await res.json() as Record<string, unknown>);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
     }

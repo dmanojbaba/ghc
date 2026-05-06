@@ -220,7 +220,7 @@
         historyList.querySelectorAll('.history-play').forEach(a => {
           a.addEventListener('click', e => {
             e.preventDefault();
-            withLoading(a, () => postCommand({ command: 'cast', device: 'queue', value: a.dataset.url }));
+            withLoading(a, () => postCommand({ command: 'queue', value: a.dataset.url }));
           });
         });
       }
@@ -321,7 +321,7 @@
         const val = document.getElementById('cast-input').value.trim();
         if (!val) return;
         withLoading(document.getElementById('queue-btn'), async () => {
-          await postCommand({ command: 'cast', device: 'queue', value: val });
+          await postCommand({ command: 'queue', value: val });
           document.getElementById('cast-input').value = '';
         });
       });

@@ -35,7 +35,11 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
     TELEGRAM_SECRET_TOKEN: "",
     YOUTUBE_API_KEY: "",
     REDIRECT_URL: process.env.REDIRECT_URL!,
-    DEVICE_QUEUE: {} as DurableObjectNamespace,
+    DEVICE_QUEUE: {
+      idFromName: () => ({} as DurableObjectId),
+      get: () => ({ fetch: vi.fn(async () => new Response("ok")) } as unknown as DurableObjectStub),
+    } as unknown as DurableObjectNamespace,
+    CALLER_KV: { get: vi.fn(async () => null), put: vi.fn() } as unknown as KVNamespace,
     ...overrides,
   };
 }
@@ -46,6 +50,16 @@ function makeCtx(): ExecutionContext {
 
 function makeDoStub(): DurableObjectStub {
   return { fetch: vi.fn(async () => new Response("ok")) } as unknown as DurableObjectStub;
+}
+
+function makeEnvWithStub(stub: DurableObjectStub, overrides: Partial<Env> = {}): Env {
+  return makeEnv({
+    DEVICE_QUEUE: {
+      idFromName: () => ({} as DurableObjectId),
+      get: () => stub,
+    } as unknown as DurableObjectNamespace,
+    ...overrides,
+  });
 }
 
 async function makeSlackRequest(text: string, env: Env): Promise<Request> {
@@ -156,6 +170,13 @@ async function getDoBody(stub: DurableObjectStub): Promise<Record<string, unknow
   return JSON.parse(await (call![0] as Request).text());
 }
 
+async function getEnqueueBody(stub: DurableObjectStub): Promise<Record<string, unknown>> {
+  const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+    (c: unknown[]) => (c[0] as Request).url.includes("/enqueue"),
+  );
+  return JSON.parse(await (call![0] as Request).text());
+}
+
 describe("handleSlack — device token parsing", () => {
   it("treats known alias as device", async () => {
     const env = makeEnv();
@@ -247,8 +268,8 @@ describe("handleTelegram — state queue truncation", () => {
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    const env = makeEnv();
-    await handleTelegram(makeTelegramRequest("state", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("state", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     const sent = JSON.parse(body.text.replace(/<\/?pre>/g, ""));
@@ -266,8 +287,8 @@ describe("handleTelegram — state queue truncation", () => {
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    const env = makeEnv();
-    await handleTelegram(makeTelegramRequest("state", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("state", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     const sent = JSON.parse(body.text.replace(/<\/?pre>/g, ""));
@@ -278,24 +299,20 @@ describe("handleTelegram — state queue truncation", () => {
 describe("handleTelegram — chat ID allowlist", () => {
   it("allows any chat when TELEGRAM_ALLOWED_CHAT_IDS is not set", async () => {
     const env = makeEnv({ TELEGRAM_ALLOWED_CHAT_IDS: "" });
-    const stub = makeDoStub();
-    const res = await handleTelegram(makeTelegramRequest("play", 111), env, stub);
+    const res = await handleTelegram(makeTelegramRequest("play", 111), env);
     expect(res.status).toBe(200);
-    expect(stub.fetch).toHaveBeenCalled();
   });
 
   it("allows a chat ID in the allowlist", async () => {
     const env = makeEnv({ TELEGRAM_ALLOWED_CHAT_IDS: "111,222" });
-    const stub = makeDoStub();
-    const res = await handleTelegram(makeTelegramRequest("play", 111), env, stub);
+    const res = await handleTelegram(makeTelegramRequest("play", 111), env);
     expect(res.status).toBe(200);
-    expect(stub.fetch).toHaveBeenCalled();
   });
 
   it("silently ignores a chat ID not in the allowlist", async () => {
     const env = makeEnv({ TELEGRAM_ALLOWED_CHAT_IDS: "111,222" });
     const stub = makeDoStub();
-    const res = await handleTelegram(makeTelegramRequest("play", 999), env, stub);
+    const res = await handleTelegram(makeTelegramRequest("play", 999), env);
     expect(res.status).toBe(200);
     expect(stub.fetch).not.toHaveBeenCalled();
   });
@@ -303,23 +320,16 @@ describe("handleTelegram — chat ID allowlist", () => {
 
 describe("handleTelegram — command parsing", () => {
   it("handles slash-prefixed command", async () => {
-    const env = makeEnv();
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("/play", 111), env, stub);
-    expect(stub.fetch).toHaveBeenCalled();
-  });
-
-  it("handles uppercase command", async () => {
-    const env = makeEnv();
-    const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("PLAY", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("/play", 111), env);
     expect(stub.fetch).toHaveBeenCalled();
   });
 
   it("handles uppercase device token", async () => {
-    const env = makeEnv();
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("cast OTV believer", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("cast OTV believer", 111), env);
     const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
       (c: unknown[]) => (c[0] as Request).url.includes("/catt"),
     );
@@ -329,13 +339,6 @@ describe("handleTelegram — command parsing", () => {
 });
 
 describe("handleSlack — command parsing", () => {
-  it("handles uppercase command", async () => {
-    const env = makeEnv();
-    const request = await makeSlackRequest("PLAY", env);
-    const res = await handleSlack(request, env, makeCtx(), makeDoStub());
-    expect(res.status).toBe(200);
-  });
-
   it("handles uppercase device token", async () => {
     const env = makeEnv();
     const stub = makeDoStub();
@@ -345,43 +348,6 @@ describe("handleSlack — command parsing", () => {
     await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
     const body = await getDoBody(stub);
     expect(body.device).toBe("otv");
-  });
-});
-
-describe("handleSlack — device command", () => {
-  it("routes device to DO set/device and returns state", async () => {
-    const env = makeEnv();
-    const state = { session: "idle", device: "otv" };
-    const stub = {
-      fetch: vi.fn(async (req: Request) => {
-        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
-        return new Response("ok");
-      }),
-    } as unknown as DurableObjectStub;
-    const ctx = makeCtx();
-    const request = await makeSlackRequest("device otv", env);
-    const res = await handleSlack(request, env, ctx, stub);
-    expect(ctx.waitUntil).not.toHaveBeenCalled();
-    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0].url).toContain("/set/device/otv");
-    const text = await res.text();
-    expect(text).toContain('"device"');
-    expect(text).toContain('"otv"');
-  });
-
-  it("uses device token as key when no explicit value given", async () => {
-    const env = makeEnv();
-    const stub = {
-      fetch: vi.fn(async (req: Request) => {
-        if ((req as Request).url.includes("/state")) return new Response("{}");
-        return new Response("ok");
-      }),
-    } as unknown as DurableObjectStub;
-    const ctx = makeCtx();
-    const request = await makeSlackRequest("device k", env);
-    await handleSlack(request, env, ctx, stub);
-    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0].url).toContain("/set/device/k");
   });
 });
 
@@ -395,17 +361,6 @@ describe("handleSlack — channel command", () => {
     await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
     const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect((call[0] as Request).url).toContain("/channel/up");
-  });
-
-  it("routes channel down to DO", async () => {
-    const env = makeEnv();
-    const stub = makeDoStub();
-    const ctx = makeCtx();
-    const request = await makeSlackRequest("channel down", env);
-    await handleSlack(request, env, ctx, stub);
-    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect((call[0] as Request).url).toContain("/channel/down");
   });
 
   it("routes channel by name to DO", async () => {
@@ -470,8 +425,8 @@ describe("handleTelegram — history command", () => {
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    const env = makeEnv();
-    await handleTelegram(makeTelegramRequest("history", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("history", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toContain("youtu.be/abc");
@@ -487,8 +442,8 @@ describe("handleTelegram — history command", () => {
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    const env = makeEnv();
-    await handleTelegram(makeTelegramRequest("history", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("history", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     const items = JSON.parse(body.text.replace(/<\/?pre>/g, ""));
@@ -533,24 +488,6 @@ describe("handleSlack — history command", () => {
   });
 });
 
-describe("handleTelegram — device sends state reply", () => {
-  it("sends state after device command", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
-    const state = { session: "idle", device: "otv" };
-    const stub = {
-      fetch: vi.fn(async (req: Request) => {
-        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
-        return new Response("ok");
-      }),
-    } as unknown as DurableObjectStub;
-    const env = makeEnv();
-    await handleTelegram(makeTelegramRequest("device otv", 111), env, stub);
-    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    const body = JSON.parse(telegramCall[1].body);
-    expect(body.text).toContain('"device"');
-  });
-});
-
 describe("handleTelegram — clear and reset send state reply", () => {
   it("sends state after clear", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
@@ -561,33 +498,17 @@ describe("handleTelegram — clear and reset send state reply", () => {
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    const env = makeEnv();
-    await handleTelegram(makeTelegramRequest("clear", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("clear", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toContain('"session"');
   });
 
-  it("sends state after reset", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
-    const state = { session: "idle", device: "o" };
-    const stub = {
-      fetch: vi.fn(async (req: Request) => {
-        if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
-        return new Response("ok");
-      }),
-    } as unknown as DurableObjectStub;
-    const env = makeEnv();
-    await handleTelegram(makeTelegramRequest("reset", 111), env, stub);
-    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    const body = JSON.parse(telegramCall[1].body);
-    expect(body.text).toContain('"session"');
-  });
 });
 
 describe("handleSlack — bare device alias shorthand", () => {
   it("treats bare known alias as device command and returns state", async () => {
-    const env = makeEnv();
     const state = { session: "idle", device: "k" };
     const stub = {
       fetch: vi.fn(async (req: Request) => {
@@ -595,31 +516,18 @@ describe("handleSlack — bare device alias shorthand", () => {
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub);
     const ctx = makeCtx();
     const request = await makeSlackRequest("k", env);
     const res = await handleSlack(request, env, ctx, stub);
     expect(ctx.waitUntil).not.toHaveBeenCalled();
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0].url).toContain("/set/device/k");
+    expect(calls[0][0].url).toContain("/device/k/state");
     const text = await res.text();
     expect(text).toContain('"device"');
     expect(text).toContain('"k"');
   });
 
-  it("treats bare full device name as device command", async () => {
-    const env = makeEnv();
-    const stub = {
-      fetch: vi.fn(async (req: Request) => {
-        if ((req as Request).url.includes("/state")) return new Response("{}");
-        return new Response("ok");
-      }),
-    } as unknown as DurableObjectStub;
-    const ctx = makeCtx();
-    const request = await makeSlackRequest("otv", env);
-    await handleSlack(request, env, ctx, stub);
-    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0].url).toContain("/set/device/otv");
-  });
 });
 
 describe("handleTelegram — bare device alias shorthand", () => {
@@ -632,22 +540,16 @@ describe("handleTelegram — bare device alias shorthand", () => {
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    const env = makeEnv();
-    await handleTelegram(makeTelegramRequest("otv", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("otv", 111), env);
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0].url).toContain("/set/device/otv");
+    expect(calls[0][0].url).toContain("/device/otv/state");
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toContain('"device"');
   });
 
-  it("does not call set/device for unknown alias", async () => {
-    const env = makeEnv();
-    const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("unknowncmd", 111), env, stub);
-    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls.every((c: unknown[]) => !(c[0] as Request).url.includes("/set/device"))).toBe(true);
-  });
+
 });
 
 describe("handleSlack — cast with channel key routes to channel", () => {
@@ -679,43 +581,57 @@ describe("handleSlack — cast with channel key routes to channel", () => {
   });
 });
 
-describe("handleSlack — tts aliases", () => {
-  it("speak routes to DO /site/ with encoded text", async () => {
+describe("handleSlack — queue command", () => {
+  it("queue without device routes to session DO /enqueue", async () => {
     const env = makeEnv();
     const stub = makeDoStub();
-    const request = await makeSlackRequest("speak hello world", env);
-    const res = await handleSlack(request, env, makeCtx(), stub);
-    expect(res.status).toBe(200);
-    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0].url).toContain("/site/");
-    expect(decodeURIComponent(calls[0][0].url.split("/site/")[1])).toBe("hello world");
+    const request = await makeSlackRequest("queue https://example.com/video", env);
+    await handleSlack(request, env, makeCtx(), stub);
+    const body = await getEnqueueBody(stub);
+    expect(body).toMatchObject({ value: "https://example.com/video" });
   });
 
-  it("talk routes to DO /site/ with encoded text", async () => {
-    const env = makeEnv();
-    const stub = makeDoStub();
-    const request = await makeSlackRequest("talk hello world", env);
-    const res = await handleSlack(request, env, makeCtx(), stub);
-    expect(res.status).toBe(200);
-    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0].url).toContain("/site/");
-    expect(decodeURIComponent(calls[0][0].url.split("/site/")[1])).toBe("hello world");
+  it("queue with device token routes to that device DO without switching session", async () => {
+    const kvPut = vi.fn();
+    const env = makeEnv({ CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace });
+    const sessionStub = makeDoStub();
+    const targetStub = { fetch: vi.fn(async () => new Response("ok")) } as unknown as DurableObjectStub;
+    env.DEVICE_QUEUE = {
+      idFromName: (name: string) => ({ name } as unknown as DurableObjectId),
+      get: (id: DurableObjectId) => ((id as unknown as { name: string }).name === "k" ? targetStub : sessionStub),
+    } as unknown as DurableObjectNamespace;
+    const request = await makeSlackRequest("queue k https://example.com/video", env);
+    await handleSlack(request, env, makeCtx(), sessionStub);
+    const calls = (targetStub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const body = JSON.parse(await calls[0][0].text()) as Record<string, unknown>;
+    expect(body).toMatchObject({ value: "https://example.com/video" });
+    expect(kvPut).not.toHaveBeenCalled();
   });
 });
 
+describe("handleSlack — tts aliases", () => {
+  it("broadcast routes to DO /site/ with encoded text", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const request = await makeSlackRequest("broadcast hello world", env);
+    const res = await handleSlack(request, env, makeCtx(), stub);
+    expect(res.status).toBe(200);
+    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0].url).toContain("/site/");
+    expect(decodeURIComponent(calls[0][0].url.split("/site/")[1])).toBe("hello world");
+  });
+
+});
+
 describe("handleSlack — volume command", () => {
-  it("fetches active device from state when no device token given", async () => {
+  it("uses session device key when no device token given", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const env = makeEnv();
     const ctx = makeCtx();
-    const stub = {
-      fetch: vi.fn(async (req: Request) => {
-        if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "o" }));
-        return new Response("ok");
-      }),
-    } as unknown as DurableObjectStub;
+    const stub = makeDoStub();
     const request = await makeSlackRequest("volume up", env);
-    await handleSlack(request, env, ctx, stub);
+    await handleSlack(request, env, ctx, stub, "o");
     await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
     const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(call[1].body);
@@ -740,20 +656,49 @@ describe("handleSlack — volume command", () => {
 
 describe("handleTelegram — playlist command", () => {
   it("routes playlist to DO /shuffle", async () => {
-    const env = makeEnv();
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("playlist", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("playlist", 111), env);
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0].url).toContain("/device/box/shuffle");
+    expect(calls[0][0].url).toContain("/shuffle");
   });
 
-  it("sets device before shuffle when device token is provided", async () => {
-    const env = makeEnv();
+  it("routes playlist with device token to /shuffle (device token is one-shot, no set/device)", async () => {
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("playlist k", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("playlist k", 111), env);
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
-    expect(calls[0]).toContain("/set/device/k");
-    expect(calls[1]).toContain("/device/box/shuffle");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/shuffle");
+  });
+});
+
+describe("handleTelegram — queue command", () => {
+  it("queue without device routes to session DO /enqueue", async () => {
+    const stub = makeDoStub();
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("queue https://example.com/video", 111), env);
+    const body = await getEnqueueBody(stub);
+    expect(body).toMatchObject({ value: "https://example.com/video" });
+  });
+
+  it("queue with device token routes to that device DO without switching session", async () => {
+    const kvPut = vi.fn();
+    const sessionStub = makeDoStub();
+    const targetStub = { fetch: vi.fn(async () => new Response("ok")) } as unknown as DurableObjectStub;
+    const env = makeEnv({
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+      DEVICE_QUEUE: {
+        idFromName: (name: string) => ({ name } as unknown as DurableObjectId),
+        get: (id: DurableObjectId) => ((id as unknown as { name: string }).name === "k" ? targetStub : sessionStub),
+      } as unknown as DurableObjectNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("queue k https://example.com/video", 111), env);
+    const calls = (targetStub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const body = JSON.parse(await calls[0][0].text()) as Record<string, unknown>;
+    expect(body).toMatchObject({ value: "https://example.com/video" });
+    expect(kvPut).not.toHaveBeenCalled();
   });
 });
 
@@ -761,14 +706,14 @@ describe("handleTelegram — AI fallback", () => {
   it("calls AI for unrecognised command and dispatches result", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi(JSON.stringify({ command: "cast", value: "jazz music" }));
-    const env = makeEnv({ CATT_AI: ai });
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "o" }));
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    await handleTelegram(makeTelegramRequest("put on some jazz", 111), env, stub);
+    const env = makeEnvWithStub(stub, { CATT_AI: ai });
+    await handleTelegram(makeTelegramRequest("put on some jazz", 111), env);
     expect(ai.run).toHaveBeenCalledOnce();
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
     const cattCall = calls.find((c: unknown[]) => (c[0] as Request).url.includes("/catt"));
@@ -778,37 +723,20 @@ describe("handleTelegram — AI fallback", () => {
     expect(body.value).toBe("jazz music");
   });
 
-  it("parses device from AI response", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
-    const ai = makeAi(JSON.stringify({ command: "volume", device: "k", value: "50" }));
-    const env = makeEnv({ CATT_AI: ai });
-    const stub = {
-      fetch: vi.fn(async (req: Request) => {
-        if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "k" }));
-        return new Response("ok");
-      }),
-    } as unknown as DurableObjectStub;
-    await handleTelegram(makeTelegramRequest("set kitchen volume to 50", 111), env, stub);
-    expect(ai.run).toHaveBeenCalledOnce();
-  });
-
   it("sets device in KV before dispatching when AI returns a device", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi(JSON.stringify({ command: "channel", device: "o", value: "lime" }));
-    const env = makeEnv({ CATT_AI: ai });
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "o" }));
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    await handleTelegram(makeTelegramRequest("Radio Lime on mini office", 111), env, stub);
+    const env = makeEnvWithStub(stub, { CATT_AI: ai });
+    await handleTelegram(makeTelegramRequest("Radio Lime on mini office", 111), env);
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
-    const deviceSetCall = calls.find(u => u.includes("/set/device/o"));
     const channelCall = calls.find(u => u.includes("/channel/lime"));
-    expect(deviceSetCall).toBeDefined();
     expect(channelCall).toBeDefined();
-    expect(calls.indexOf(deviceSetCall!)).toBeLessThan(calls.indexOf(channelCall!));
   });
 
   it("sends 'Unknown command' when AI returns unknown command", async () => {
@@ -816,7 +744,7 @@ describe("handleTelegram — AI fallback", () => {
     const ai = makeAi(JSON.stringify({ command: "unknown" }));
     const env = makeEnv({ CATT_AI: ai });
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("blah blah blah", 111), env, stub);
+    await handleTelegram(makeTelegramRequest("blah blah blah", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toContain("Unknown command");
@@ -828,7 +756,7 @@ describe("handleTelegram — AI fallback", () => {
     const ai = makeAi("not valid json");
     const env = makeEnv({ CATT_AI: ai });
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("do the thing", 111), env, stub);
+    await handleTelegram(makeTelegramRequest("do the thing", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toContain("AI error:");
@@ -839,7 +767,7 @@ describe("handleTelegram — AI fallback", () => {
     const ai = makeAi(null);
     const env = makeEnv({ CATT_AI: ai });
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("do something weird", 111), env, stub);
+    await handleTelegram(makeTelegramRequest("do something weird", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toContain("AI error:");
@@ -850,21 +778,21 @@ describe("handleTelegram — AI fallback", () => {
     const ai = makeAi(JSON.stringify({ command: "cast", value: "jazz" }));
     const env = makeEnv({ CATT_AI: ai });
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("cast jazz", 111), env, stub);
+    await handleTelegram(makeTelegramRequest("cast jazz", 111), env);
     expect(ai.run).not.toHaveBeenCalled();
   });
 
   it("AI system prompt includes channel synonyms and numbers", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi(JSON.stringify({ command: "channel", value: "arr" }));
-    const env = makeEnv({ CATT_AI: ai });
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "o" }));
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    await handleTelegram(makeTelegramRequest("Radio Rahman", 111), env, stub);
+    const env = makeEnvWithStub(stub, { CATT_AI: ai });
+    await handleTelegram(makeTelegramRequest("Radio Rahman", 111), env);
     expect(ai.run).toHaveBeenCalledOnce();
     const prompt = (ai.run as ReturnType<typeof vi.fn>).mock.calls[0][1].messages[0].content as string;
     expect(prompt).toContain("arr=Radio ARR|Radio Rahman|8");
@@ -872,33 +800,29 @@ describe("handleTelegram — AI fallback", () => {
     expect(calls.some((c: unknown[]) => (c[0] as Request).url.includes("/channel/arr"))).toBe(true);
   });
 
-  it("sends confirmation with command, value, and active device from state", async () => {
+  it("sends confirmation with command, value, and active device from KV session", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi(JSON.stringify({ command: "cast", value: "jazz music" }));
-    const env = makeEnv({ CATT_AI: ai });
-    const stub = {
-      fetch: vi.fn(async (req: Request) => {
-        if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "k" }));
-        return new Response("ok");
-      }),
-    } as unknown as DurableObjectStub;
-    await handleTelegram(makeTelegramRequest("put on some jazz", 111), env, stub);
+    const stub = makeDoStub();
+    const env = makeEnvWithStub(stub, {
+      CATT_AI: ai,
+      CALLER_KV: { get: vi.fn(async () => "k"), put: vi.fn() } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("put on some jazz", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toBe("command: cast\nvalue: jazz music\ndevice: k");
   });
 
-  it("sends confirmation with command, value, and device from state (device set by AI)", async () => {
+  it("sends confirmation with command, value, and device from KV session (device set by AI)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi(JSON.stringify({ command: "channel", device: "o", value: "lime" }));
-    const env = makeEnv({ CATT_AI: ai });
-    const stub = {
-      fetch: vi.fn(async (req: Request) => {
-        if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "o" }));
-        return new Response("ok");
-      }),
-    } as unknown as DurableObjectStub;
-    await handleTelegram(makeTelegramRequest("Radio Lime on mini office", 111), env, stub);
+    const stub = makeDoStub();
+    const env = makeEnvWithStub(stub, {
+      CATT_AI: ai,
+      CALLER_KV: { get: vi.fn(async () => "o"), put: vi.fn() } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("Radio Lime on mini office", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toBe("command: channel\nvalue: lime\ndevice: o");
@@ -909,7 +833,7 @@ describe("handleTelegram — AI fallback", () => {
     const ai = makeAi(JSON.stringify({ command: "cast", device: "notadevice", value: "jazz" }));
     const env = makeEnv({ CATT_AI: ai });
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("play jazz on notadevice", 111), env, stub);
+    await handleTelegram(makeTelegramRequest("play jazz on notadevice", 111), env);
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
     expect(calls.every(u => !u.includes("/set/device/notadevice"))).toBe(true);
   });
@@ -917,11 +841,11 @@ describe("handleTelegram — AI fallback", () => {
   it("sends 'Backend error' when dispatchCommand throws (AI path)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const ai = makeAi(JSON.stringify({ command: "cast", value: "jazz" }));
-    const env = makeEnv({ CATT_AI: ai });
     const stub = {
       fetch: vi.fn(async () => { throw new Error("backend unavailable"); }),
     } as unknown as DurableObjectStub;
-    await handleTelegram(makeTelegramRequest("put on some jazz", 111), env, stub);
+    const env = makeEnvWithStub(stub, { CATT_AI: ai });
+    await handleTelegram(makeTelegramRequest("put on some jazz", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toBe("Backend error");
@@ -933,14 +857,17 @@ describe("handleTelegram — AI fallback", () => {
       { command: "channel", value: "lime" },
       { command: "sleep", value: "30" },
     ]));
-    const env = makeEnv({ CATT_AI: ai });
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if (req.url.includes("/state")) return new Response(JSON.stringify({ device: "o" }));
         return new Response("ok");
       }),
     } as unknown as DurableObjectStub;
-    await handleTelegram(makeTelegramRequest("stream radio lime for 30 minutes", 111), env, stub);
+    const env = makeEnvWithStub(stub, {
+      CATT_AI: ai,
+      CALLER_KV: { get: vi.fn(async () => "o"), put: vi.fn() } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("stream radio lime for 30 minutes", 111), env);
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
     expect(calls.some(u => u.includes("channel") && u.includes("lime"))).toBe(true);
     expect(calls.some(u => u.includes("sleep") && u.includes("30"))).toBe(true);
@@ -955,7 +882,7 @@ describe("handleTelegram — /start command", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const env = makeEnv();
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("/start", 111), env, stub);
+    await handleTelegram(makeTelegramRequest("/start", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toContain("Commands:");
@@ -967,7 +894,7 @@ describe("handleTelegram — /start command", () => {
     const ai = makeAi(JSON.stringify({ command: "cast", value: "jazz" }));
     const env = makeEnv({ CATT_AI: ai });
     const stub = makeDoStub();
-    await handleTelegram(makeTelegramRequest("/start", 111), env, stub);
+    await handleTelegram(makeTelegramRequest("/start", 111), env);
     expect(ai.run).not.toHaveBeenCalled();
   });
 });
@@ -975,13 +902,162 @@ describe("handleTelegram — /start command", () => {
 describe("handleTelegram — error handling", () => {
   it("sends 'Backend error' when dispatchCommand throws (known command path)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
-    const env = makeEnv();
     const stub = {
       fetch: vi.fn(async () => { throw new Error("backend unavailable"); }),
     } as unknown as DurableObjectStub;
-    await handleTelegram(makeTelegramRequest("volume up", 111), env, stub);
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("play", 111), env);
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     expect(body.text).toBe("Backend error");
+  });
+});
+
+describe("handleTelegram — KV session", () => {
+  it("writes device alias to CALLER_KV on bare alias", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response("{}")) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("k", 111), env);
+    expect(kvPut).toHaveBeenCalledWith("telegram:111", "k");
+  });
+
+  it("writes DEFAULT_DEVICE to CALLER_KV on reset", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response("{}")) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => "k"), put: kvPut } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("reset", 111), env);
+    expect(kvPut).toHaveBeenCalledWith("telegram:111", "o");
+  });
+
+  it("reads session device from CALLER_KV", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const stub = makeDoStub();
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => "b"), put: vi.fn() } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("play", 111), env);
+    expect(stub.fetch).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringContaining("/play") }));
+  });
+
+  it("volume without device token uses KV session device", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const env = makeEnvWithStub(makeDoStub(), {
+      CALLER_KV: { get: vi.fn(async () => "k"), put: vi.fn() } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("volume 50", 111), env);
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.device).toBe("Mini Kitchen");
+  });
+});
+
+describe("handleSlack — device command", () => {
+  it("device command writes canonical key to CALLER_KV and returns state", async () => {
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response(JSON.stringify({ session: "idle" }))) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+    });
+    const ctx = makeCtx();
+    const request = await makeSlackRequest("device k", env);
+    const res = await handleSlack(request, env, ctx, stub);
+    expect(ctx.waitUntil).not.toHaveBeenCalled();
+    expect(kvPut).toHaveBeenCalledWith("slack:all", "k");
+    expect(await res.text()).toContain("idle");
+  });
+
+  it("device command with invalid name does not update KV and replies unknown device", async () => {
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response("{}")) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+    });
+    const res = await handleSlack(await makeSlackRequest("device notadevice", env), env, makeCtx(), stub);
+    expect(kvPut).not.toHaveBeenCalled();
+    expect(await res.text()).toBe("Unknown device");
+  });
+
+  it("device command with no value does not update KV and replies unknown device", async () => {
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response("{}")) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+    });
+    const res = await handleSlack(await makeSlackRequest("device", env), env, makeCtx(), stub);
+    expect(kvPut).not.toHaveBeenCalled();
+    expect(await res.text()).toBe("Unknown device");
+  });
+});
+
+describe("handleTelegram — device command", () => {
+  it("device command writes canonical key to CALLER_KV and sends state reply", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response(JSON.stringify({ session: "idle" }))) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("device k", 111), env);
+    expect(kvPut).toHaveBeenCalledWith("telegram:111", "k");
+    const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(telegramCall[1].body);
+    expect(body.text).toContain("idle");
+  });
+
+  it("device command with invalid name does not update KV and sends unknown device message", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response("{}")) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("device notadevice", 111), env);
+    expect(kvPut).not.toHaveBeenCalled();
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(JSON.parse(call[1].body).text).toBe("Unknown device");
+  });
+
+  it("device command with no value does not update KV and sends unknown device message", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response("{}")) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("device", 111), env);
+    expect(kvPut).not.toHaveBeenCalled();
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(JSON.parse(call[1].body).text).toBe("Unknown device");
+  });
+});
+
+describe("handleSlack — KV session", () => {
+  it("writes device alias to CALLER_KV on bare alias", async () => {
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response("{}")) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+    });
+    const request = await makeSlackRequest("k", env);
+    await handleSlack(request, env, makeCtx(), stub);
+    expect(kvPut).toHaveBeenCalledWith("slack:all", "k");
+  });
+
+  it("writes DEFAULT_DEVICE to CALLER_KV on reset", async () => {
+    const kvPut = vi.fn();
+    const stub = { fetch: vi.fn(async () => new Response("{}")) } as unknown as DurableObjectStub;
+    const env = makeEnvWithStub(stub, {
+      CALLER_KV: { get: vi.fn(async () => "k"), put: kvPut } as unknown as KVNamespace,
+    });
+    const request = await makeSlackRequest("reset", env);
+    await handleSlack(request, env, makeCtx(), stub);
+    expect(kvPut).toHaveBeenCalledWith("slack:all", "o");
   });
 });

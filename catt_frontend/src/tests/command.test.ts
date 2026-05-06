@@ -106,6 +106,22 @@ describe("POST /api/command", () => {
     const res = await onRequestPost(makeCtx(postRequest(cookieVal), BASE_ENV));
     expect(res.status).toBe(504);
   }, PROXY_TIMEOUT_MS + 5000);
+
+  it("sends X-Caller: kids header to BFF", async () => {
+    const { onRequestPost } = await import("../../functions/api/command.js");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("ok", { status: 200 })));
+    const cookieVal = extractCookieValue(await kidsCookieHeader());
+    await onRequestPost(makeCtx(postRequest(cookieVal, { command: "play" }), BASE_ENV));
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)["X-Caller"]).toBe("kids");
+  });
+
+  it("returns 401 with admin cookie (role guard tightened to kids-only)", async () => {
+    const { onRequestPost } = await import("../../functions/api/command.js");
+    const cookieVal = extractCookieValue(await adminCookieHeader());
+    const res = await onRequestPost(makeCtx(postRequest(cookieVal, { command: "play" }), BASE_ENV));
+    expect(res.status).toBe(401);
+  });
 });
 
 // ── admin command proxy ────────────────────────────────────────────────────
@@ -145,6 +161,15 @@ describe("POST /api/admin/command", () => {
     const res = await onRequestPost(makeCtx(postRequest(cookieVal), BASE_ENV));
     expect(res.status).toBe(504);
   }, PROXY_TIMEOUT_MS + 5000);
+
+  it("sends X-Caller: admin header to BFF", async () => {
+    const { onRequestPost } = await import("../../functions/api/admin/command.js");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("ok", { status: 200 })));
+    const cookieVal = extractCookieValue(await adminCookieHeader());
+    await onRequestPost(makeCtx(postRequest(cookieVal, { command: "play" }), BASE_ENV));
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)["X-Caller"]).toBe("admin");
+  });
 });
 
 // ── admin logout ───────────────────────────────────────────────────────────
@@ -200,6 +225,21 @@ describe("GET /api/admin/state", () => {
     const json = await res.json() as { device: string; history: unknown[] };
     expect(json.device).toBe("otv");
     expect(json.history).toEqual(historyPayload);
+  });
+
+  it("sends X-Caller: admin header to both BFF calls", async () => {
+    const { onRequestGet } = await import("../../functions/api/admin/state.js");
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ device: "o" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response("[]", { status: 200 })),
+    );
+    const cookieVal = extractCookieValue(await adminCookieHeader());
+    await onRequestGet(makeCtx(getRequest(cookieVal, "/api/admin/state"), BASE_ENV));
+    const calls = vi.mocked(fetch).mock.calls as [string, RequestInit][];
+    expect(calls).toHaveLength(2);
+    for (const [, init] of calls) {
+      expect((init.headers as Record<string, string>)["X-Caller"]).toBe("admin");
+    }
   });
 });
 
@@ -273,6 +313,15 @@ describe("GET /api/state", () => {
     expect(res.status).toBe(200);
     const json = await res.json() as { prev?: string };
     expect(json.prev).toBeUndefined();
+  });
+
+  it("sends X-Caller: kids header to BFF", async () => {
+    const { onRequestGet } = await import("../../functions/api/state.js");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ device: "o", session: "idle" }), { status: 200 })));
+    const cookieVal = extractCookieValue(await kidsCookieHeader());
+    await onRequestGet(makeCtx(getRequest(cookieVal, "/api/state"), BASE_ENV));
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)["X-Caller"]).toBe("kids");
   });
 });
 

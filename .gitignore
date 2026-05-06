@@ -8,3 +8,9 @@ _internal/
 
 # Claude Code
 .claude/
+
+# Cloudflare local dev secrets
+.dev.vars
+
+# Backend local dev secrets
+.env

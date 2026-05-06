@@ -3,7 +3,7 @@ import { getParsedUrl } from "./urlHelper";
 import {
   DEVICES, DEVICE_ID, INPUT_TO_DEVICE,
   DEFAULT_APP, DEFAULT_DEVICE, DEFAULT_VOLUME,
-  getInputKey, getAppKey, getAdjacentInput, getChannelCode, getAdjacentChannel, isAudioOnlyInput,
+  getInputKey, getAppKey, getAdjacentInput, getChannelCode,
 } from "./devices";
 
 function randomString(length = 6): string {
@@ -15,12 +15,12 @@ function randomString(length = 6): string {
   return result;
 }
 
-async function doGet(stub: DurableObjectStub, path: string): Promise<void> {
-  await stub.fetch(`https://do/device/box${path}`);
+async function doGet(stub: DurableObjectStub, deviceKey: string, path: string): Promise<void> {
+  await stub.fetch(`https://do/device/${deviceKey}${path}`);
 }
 
-async function doState(stub: DurableObjectStub): Promise<Record<string, unknown>> {
-  const res = await stub.fetch("https://do/device/box/state");
+async function doState(stub: DurableObjectStub, deviceKey: string): Promise<Record<string, unknown>> {
+  const res = await stub.fetch(`https://do/device/${deviceKey}/state`);
   return res.json() as Promise<Record<string, unknown>>;
 }
 
@@ -38,13 +38,14 @@ export async function handleQuery(
   requestId: string,
   payload: { devices: Array<{ id: string }> },
   stub: DurableObjectStub,
+  deviceKey = DEFAULT_DEVICE,
 ): Promise<Record<string, unknown>> {
   const states: Record<string, unknown> = {};
 
   for (const device of payload.devices) {
     if (device.id === DEVICE_ID) {
-      const doSt      = await doState(stub);
-      const inputKey  = String(doSt.device ?? DEFAULT_DEVICE);
+      const doSt      = await doState(stub, deviceKey);
+      const inputKey  = deviceKey;
 
       states[device.id] = {
         online:              true,
@@ -75,6 +76,7 @@ async function handleExecute(
   },
   stub: DurableObjectStub,
   env: Env,
+  deviceKey = DEFAULT_DEVICE,
 ): Promise<Record<string, unknown>> {
   const results: unknown[] = [];
 
@@ -84,8 +86,7 @@ async function handleExecute(
         results.push({ ids: [device.id], status: "SUCCESS", states: { online: true } });
         continue;
       }
-      const doSt = await doState(stub);
-      const inputKey   = String(doSt.device ?? DEFAULT_DEVICE);
+      const inputKey   = deviceKey;
       const cattDevice = INPUT_TO_DEVICE[inputKey] ?? inputKey;
 
       for (const exec of cmd.execution) {
@@ -95,7 +96,8 @@ async function handleExecute(
 
         if (command === "action.devices.commands.OnOff") {
           if (params.on) {
-            await doGet(stub, "/reset");
+            await doGet(stub, deviceKey, "/reset");
+            await env.CALLER_KV.put("googlehome:all", DEFAULT_DEVICE);
             result = {
               status: "SUCCESS",
               states: {
@@ -108,21 +110,21 @@ async function handleExecute(
               },
             };
           } else {
-            await doGet(stub, "/off");
+            await doGet(stub, deviceKey, "/off");
             result = { status: "SUCCESS", states: { on: false, online: true, playbackState: "STOPPED" } };
           }
 
         } else if (command === "action.devices.commands.SetToggles") {
           const on = Boolean((params.updateToggleSettings as Record<string, boolean>)?.youtube_app);
           const appMode = on ? "youtube" : DEFAULT_APP;
-          await doGet(stub, "/set/app/" + appMode);
+          await doGet(stub, deviceKey, "/set/app/" + appMode);
           result = { status: "SUCCESS", states: { online: true, currentToggleSettings: { youtube_app: on } } };
 
         } else if (command === "action.devices.commands.SetInput") {
           const newInput = String(params.newInput);
           const key      = getInputKey(DEVICE_ID, newInput, null) ?? newInput;
-          await doGet(stub, "/set/device/" + key);
-          const updatedSt = await doState(stub);
+          await env.CALLER_KV.put("googlehome:all", key);
+          const updatedSt = await doState(stub, deviceKey);
           const newApp    = String(updatedSt.app ?? DEFAULT_APP);
           result = {
             status: "SUCCESS",
@@ -140,8 +142,8 @@ async function handleExecute(
         ) {
           const delta  = command === "action.devices.commands.NextInput" ? 1 : -1;
           const key    = getAdjacentInput(DEVICE_ID, inputKey, delta);
-          await doGet(stub, "/set/device/" + key);
-          const updatedSt = await doState(stub);
+          await env.CALLER_KV.put("googlehome:all", key);
+          const updatedSt = await doState(stub, deviceKey);
           const newApp    = String(updatedSt.app ?? DEFAULT_APP);
           result = {
             status: "SUCCESS",
@@ -157,34 +159,28 @@ async function handleExecute(
           const channelCode = String(
             params.channelCode ?? getChannelCode(DEVICE_ID, String(params.channelNumber)) ?? "",
           );
-          await doGet(stub, "/clear");
-          await doGet(stub, "/set/channel/" + channelCode);
-          await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode, env.REDIRECT_URL)));
+          await doGet(stub, deviceKey, "/channel/" + encodeURIComponent(channelCode));
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.relativeChannel") {
-          const currentChannel = String(doSt.channel);
           const delta = Number(params.relativeChannelChange);
-          const channelCode = getAdjacentChannel(DEVICE_ID, currentChannel, delta);
-          await doGet(stub, "/clear");
-          await doGet(stub, "/set/channel/" + channelCode);
-          await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(channelCode, env.REDIRECT_URL)));
+          await doGet(stub, deviceKey, "/channel/" + (delta >= 0 ? "up" : "down"));
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaShuffle") {
-          await doGet(stub, "/shuffle");
+          await doGet(stub, deviceKey, "/shuffle");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.returnChannel") {
-          await doGet(stub, "/prev");
+          await doGet(stub, deviceKey, "/prev");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaPrevious") {
-          await doGet(stub, "/prev");
+          await doGet(stub, deviceKey, "/prev");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaNext") {
-          await doGet(stub, "/next");
+          await doGet(stub, deviceKey, "/next");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (
@@ -195,13 +191,13 @@ async function handleExecute(
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaStop") {
-          await doGet(stub, "/stop");
+          await doGet(stub, deviceKey, "/stop");
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.appSelect") {
           const raw = String(params.newApplication ?? params.newApplicationName ?? DEFAULT_APP);
           const app = getAppKey(DEVICE_ID, raw, DEFAULT_APP);
-          await doGet(stub, "/set/app/" + app);
+          await doGet(stub, deviceKey, "/set/app/" + app);
           result = { status: "SUCCESS", states: { online: true, currentApplication: app } };
 
         } else if (
@@ -210,8 +206,8 @@ async function handleExecute(
         ) {
           const query = String(params.newApplicationName ?? params.newApplication ?? "");
           if (query) {
-            await doGet(stub, "/clear");
-            await doGet(stub, "/cast/" + encodeURIComponent(getParsedUrl(query, env.REDIRECT_URL)));
+            await doGet(stub, deviceKey, "/clear");
+            await doGet(stub, deviceKey, "/cast/" + encodeURIComponent(getParsedUrl(query, env.REDIRECT_URL)));
           }
 
           result = { status: "SUCCESS", states: { online: true } };
@@ -224,15 +220,15 @@ async function handleExecute(
         } else if (command === "action.devices.commands.mediaSeekRelative") {
           const seconds = Number(params.relativePositionMs ?? 0) / 1000;
           if (seconds > 0) {
-            await castCommand(env.CATT_BACKEND_URL, cattDevice, "ffwd", Math.abs(seconds), undefined, env.CATT_BACKEND_SECRET);
+            await doGet(stub, deviceKey, `/ffwd/${encodeURIComponent(Math.abs(seconds))}`);
           } else if (seconds < 0) {
-            await castCommand(env.CATT_BACKEND_URL, cattDevice, "rewind", Math.abs(seconds), undefined, env.CATT_BACKEND_SECRET);
+            await doGet(stub, deviceKey, `/rewind/${encodeURIComponent(Math.abs(seconds))}`);
           }
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mute") {
           const muted = Boolean(params.mute ?? true);
-          await castCommand(env.CATT_BACKEND_URL, cattDevice, "volumemute", muted, undefined, env.CATT_BACKEND_SECRET);
+          await doGet(stub, deviceKey, `/mute/${muted}`);
           result = { status: "SUCCESS", states: { online: true, isMuted: muted } };
 
         } else if (command === "action.devices.commands.volumeRelative") {
@@ -256,7 +252,7 @@ async function handleExecute(
   return { requestId, payload: { commands: results } };
 }
 
-export async function handleFulfillment(request: Request, env: Env, stub: DurableObjectStub): Promise<Response> {
+export async function handleFulfillment(request: Request, env: Env, stub: DurableObjectStub, deviceKey = DEFAULT_DEVICE): Promise<Response> {
   const body      = await request.json() as {
     requestId: string;
     inputs: Array<{ intent: string; payload?: unknown }>;
@@ -271,9 +267,9 @@ export async function handleFulfillment(request: Request, env: Env, stub: Durabl
     } else if (input.intent === "action.devices.DISCONNECT") {
       return Response.json({});
     } else if (input.intent === "action.devices.QUERY") {
-      result = await handleQuery(requestId, input.payload as Parameters<typeof handleQuery>[1], stub);
+      result = await handleQuery(requestId, input.payload as Parameters<typeof handleQuery>[1], stub, deviceKey);
     } else if (input.intent === "action.devices.EXECUTE") {
-      result = await handleExecute(requestId, input.payload as Parameters<typeof handleExecute>[1], stub, env);
+      result = await handleExecute(requestId, input.payload as Parameters<typeof handleExecute>[1], stub, env, deviceKey);
     }
   }
 

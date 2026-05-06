@@ -1,0 +1,9 @@
+CATT_API_KEY=your-catt-api-key
+CATT_BACKEND_SECRET=your-backend-secret
+CATT_BACKEND_URL=https://backend.example.com
+REDIRECT_URL=https://redirect.example.com
+SLACK_SIGNING_SECRET=your-slack-signing-secret
+TELEGRAM_ALLOWED_CHAT_IDS=123456789
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_SECRET_TOKEN=your-secret-token
+YOUTUBE_API_KEY=your-youtube-api-key

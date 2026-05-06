@@ -24,6 +24,11 @@ class_name = "DeviceQueue"
 tag = "v1"
 new_sqlite_classes = ["DeviceQueue"]
 
+[[kv_namespaces]]
+binding = "CALLER_KV"
+id = "864ec8d98dec4b1da7f7f9c9cf1171b3"
+preview_id = "3599bf2eb7a94e3394a3f9ecfe0427b9"
+
 [ai]
 binding = "CATT_AI"
 
