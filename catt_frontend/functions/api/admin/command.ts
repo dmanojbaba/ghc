@@ -11,7 +11,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = await request.json<{ command?: string; device?: string; value?: string }>();
   return fetchWithTimeout(`${env.CATT_BFF_URL}/catt`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-API-Key": env.CATT_API_KEY },
+    headers: { "Content-Type": "application/json", "X-API-Key": env.CATT_API_KEY, "X-Caller": "admin" },
     body: JSON.stringify(body),
   });
 };

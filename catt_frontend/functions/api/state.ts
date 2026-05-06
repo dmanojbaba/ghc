@@ -9,7 +9,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   if (denied) return denied;
 
   const res = await fetchWithTimeout(`${env.CATT_BFF_URL}/device/box/state`, {
-    headers: { "X-API-Key": env.CATT_API_KEY },
+    headers: { "X-API-Key": env.CATT_API_KEY, "X-Caller": "kids" },
   });
   if (!res.ok) return res;
 

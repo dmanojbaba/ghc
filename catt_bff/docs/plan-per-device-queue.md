@@ -609,7 +609,7 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 4. Add `X-Caller: admin` to `functions/api/admin/state.ts`
 5. Update `catt_frontend` tests (see test changes section)
 6. Run `npm test` in `catt_frontend` — all tests must pass
-**Status**: Not Started
+**Status**: Complete
 
 ---
 
