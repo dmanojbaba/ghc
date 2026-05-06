@@ -43,9 +43,7 @@ Two callers targeting the same physical Chromecast simultaneously (e.g. Telegram
 
 ### Unchanged
 
-- `DeviceQueue.ts` — all queue, alarm, sleep, history, polling logic stays exactly the same
 - `catt.ts`, `urlHelper.ts`, `oauth.ts` — unchanged
-- `cattHandler.ts` — minimal change: receives `deviceKey` alongside `doStub` to eliminate the vestigial `state.device` read for volume
 - Auth logic in `index.ts` — unchanged
 - `/echo` route — unchanged
 - All Telegram and Slack command parsing and dispatch logic — unchanged
@@ -54,7 +52,7 @@ Two callers targeting the same physical Chromecast simultaneously (e.g. Telegram
 
 ### The `device` KV inside each DO
 
-With one DO per physical device, the `device` KV becomes fully vestigial — the routing layer always selects the correct DO before any command reaches it, and `deviceKey` is passed explicitly to `cattHandler` so volume no longer reads it either. The `device` KV key is removed from `DeviceQueue.ts` as part of this plan (not deferred).
+With one DO per physical device, the `device` KV is fully vestigial — the routing layer always selects the correct DO via `idFromName(deviceKey)`, and `deviceKey` is derived from the request URL (`parts[1]`) inside the DO for all `castCommand` calls. `_deviceKey` is persisted in kv once per request solely for use by `alarm()`, which runs without a request URL. The `device` KV key has been removed from `DeviceQueue.ts`. The `device` command has also been removed from all integrations — the bare device alias (e.g. `k`) is the sole mechanism for switching sessions. All DO internal URLs use `/device/<key>/<action>` instead of the old `/device/box/<action>`.
 
 ### `catt-bff-kv` session reset behaviour
 
@@ -89,7 +87,7 @@ Stores the active device key for every session-based caller. Must be created in 
 | `slack:all` | `slack:all` | `"o"` | Slack user sends a bare device alias | `DEFAULT_DEVICE` |
 | `googlehome:all` | `googlehome:all` | `"b"` | Google Home executes `SetInput`, `NextInput`, or `PreviousInput` | `DEFAULT_DEVICE` |
 | `ui:kids` | `ui:kids` | `"k"` | Kids UI sends `{ command: "device", value: "k" }` | `DEFAULT_DEVICE` |
-| `ui:admin` | `ui:admin` | `"otv"` | Admin UI sends `{ command: "device", value: "k" }` | `DEFAULT_DEVICE` |
+| `ui:admin` | `ui:admin` | `"otv"` | Admin UI sends `{ command: "device", value: "otv" }` | `DEFAULT_DEVICE` |
 | `http:<caller>` | `http:api-client-1` | `"zbk"` | Raw HTTP POST sends `{ command: "device", value: "zbk", caller: "api-client-1" }` | `DEFAULT_DEVICE` |
 
 TTL: none (persists until overwritten). All KV entries are created lazily on first device selection — until then every caller falls back to `DEFAULT_DEVICE` (`"o"`).
@@ -179,20 +177,12 @@ For all paths, `doStub = getDoStubForDevice(env, deviceKey)`.
 
 **Device resolution for all session callers (`ui:kids`, `ui:admin`, `http:<caller>`):**
 
-- `command: "device"` — resolve `body.value` via `getInputKey`; write to KV; route to new device DO.
-- `command: "cast"` with `body.device` present and not `"queue"` — resolve `body.device` via `getInputKey`; if valid, update KV session and use as `deviceKey`. Matches current behaviour where cast with a device implicitly sets the active device.
+- `command: "device"` — resolve `body.value` via `getInputKey`; write to KV; return state from new DO (handled directly in `index.ts`, does not go to `cattHandler`).
+- `command: "cast"` with `body.device` present and not `"queue"` — resolve `body.device` via `getInputKey`; if valid, update KV session and use as `deviceKey`.
 - `body.device = "queue"` — skip device resolution; use current KV session device; pass `device: "queue"` through to `cattHandler` unchanged so it queues without casting immediately.
 - `command: "reset"` — after routing to DO, reset KV session: `await env.CALLER_KV.put(sessionKey, DEFAULT_DEVICE)`.
 - `command: "clear"` — KV session unchanged.
-
-```ts
-const isQueueDevice = body.device === "queue";
-const resolvedKey = isQueueDevice ? null : getInputKey(DEVICE_ID, body.device ?? body.value, null);
-if (resolvedKey) await env.CALLER_KV.put(sessionKey, resolvedKey);
-deviceKey = resolvedKey ?? deviceKey;
-// after dispatching to DO:
-if (body.command === "reset") await env.CALLER_KV.put(sessionKey, DEFAULT_DEVICE);
-```
+- All other inline device tokens (e.g. `volume k 50`) are one-shot — they do not update the KV session.
 
 **`/slack` route:**
 ```
@@ -225,14 +215,14 @@ POST /fulfillment
 
 **`/device/*` route:**
 ```
-GET /device/box/state
+GET /device/box/state  (frontend always sends /device/box/<action>)
   → xcaller = request.headers.get("X-Caller") ?? "admin"
   → sessionKey = xcaller === "kids" ? "ui:kids" : "ui:admin"
   → deviceKey = await getSessionDeviceKey(env, sessionKey)
   → stub = getDoStubForDevice(env, deviceKey)
-  → stub.fetch(request)
+  → URL rewritten to /device/<deviceKey>/<action> before forwarding to DO
 ```
-Same applies to `/device/box/history` and any other `/device/box/*` sub-routes. The URL path (`box`) is ignored — the DO is selected by caller session.
+The frontend always sends `/device/box/<action>` — the `box` segment is replaced with the real device key by `index.ts` before forwarding.
 
 **`scheduled` handler** — reset all device DOs:
 
@@ -240,8 +230,8 @@ Same applies to `/device/box/history` and any other `/device/box/*` sub-routes. 
 async scheduled(_event, env) {
   for (const key of getAllDeviceKeys(DEVICE_ID)) {
     const stub = getDoStub(env, key);
-    await stub.fetch(new Request("https://do/device/box/clear"));
-    await stub.fetch(new Request("https://do/device/box/set/app/" + DEFAULT_APP));
+    await stub.fetch(new Request(`https://do/device/${key}/clear`));
+    await stub.fetch(new Request(`https://do/device/${key}/set/app/` + DEFAULT_APP));
   }
 }
 ```
@@ -253,32 +243,18 @@ async scheduled(_event, env) {
 **`handleQuery`** — use `deviceKey` param instead of reading from DO state:
 
 ```ts
-// Before
-const inputKey = String(doSt.device ?? DEFAULT_DEVICE);
-
-// After
 const inputKey = deviceKey; // passed down from handleFulfillment
 ```
 
-**`SetInput`** — write to KV instead of DO:
+**`SetInput`** — write to KV (no DO `set/device` call):
 
 ```ts
-// Before
-await doGet(stub, "/set/device/" + key);
-
-// After
 await env.CALLER_KV.put("googlehome:all", key);
-// stub is already pointing to the new DO — caller must re-route next request via KV
 ```
 
 **`NextInput` / `PreviousInput`** — use `deviceKey` param, write result to KV:
 
 ```ts
-// Before
-const key = getAdjacentInput(DEVICE_ID, inputKey, delta);
-await doGet(stub, "/set/device/" + key);
-
-// After
 const key = getAdjacentInput(DEVICE_ID, deviceKey, delta);
 await env.CALLER_KV.put("googlehome:all", key);
 ```
@@ -304,11 +280,12 @@ All other GH commands (`play`, `stop`, `volume`, `channel`, `shuffle`, etc.) are
    const deviceKey = await env.CALLER_KV.get(`telegram:${chatId}`) ?? DEFAULT_DEVICE;
    const doStub = getDoStub(env, deviceKey); // imported from index or a shared helper
    ```
-3. On bare device alias (`command in INPUT_TO_DEVICE`), write to KV:
+3. On bare device alias (`command in INPUT_TO_DEVICE`) or `device <key>` command, write canonical input key to KV:
    ```ts
-   const resolvedKey = INPUT_TO_DEVICE[command]; // already a known key
-   await env.CALLER_KV.put(`telegram:${chatId}`, resolvedKey);
+   const inputKey = getInputKey(DEVICE_ID, command, null) ?? command;
+   await env.CALLER_KV.put(`telegram:${chatId}`, inputKey);
    ```
+   Both paths are equivalent — `device k` and the bare alias `k` produce the same KV write and state reply.
 4. On `reset`, reset KV session:
    ```ts
    await env.CALLER_KV.put(`telegram:${chatId}`, DEFAULT_DEVICE);
@@ -380,27 +357,11 @@ Since `device` is removed from `DeviceQueue.ts` as part of this plan, `getState(
 
 ### `catt_bff/src/cattHandler.ts`
 
-Accept `deviceKey: string` as an additional parameter alongside `doStub`. Use it directly for `volume` instead of reading `state.device` from the DO:
-
-```ts
-// Before
-const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
-const state = await stateRes.json() as { device?: string };
-const resolvedDevice = resolveDevice(state.device ?? "");
-
-// After
-const resolvedDevice = resolveDevice(deviceKey); // passed from index.ts — no DO read needed
-```
+Accepts `deviceKey: string` as an additional parameter alongside `doStub`. Uses it directly for `volume` — no DO state read. All DO request URLs use `/device/<deviceKey>/<action>` instead of the old `/device/box/<action>`.
 
 ### `catt_bff/src/DeviceQueue.ts`
 
-Remove the `device` KV key — it is fully vestigial after this plan:
-
-- Remove from `defaultFor()` — no longer initialised on DO creation
-- Remove from `clearState()` — no longer reset on clear
-- Remove from the `reset` route — no longer reset on full reset
-- Remove from the `set/device` initialisation call
-- Remove from `getState()` return object — `index.ts` injects the correct value from `catt-bff-kv` instead
+`device` KV key removed. `deviceKey` comes from `parts[1]` of the request URL in every route. `_deviceKey` is stored in kv once per request for use by `alarm()`. All method signatures that previously read `this.get("device")` now receive `deviceKey` as an explicit parameter. The `set/device` route and `device` command are removed. The `device` command is also removed from all integrations — bare alias is the sole session-switching mechanism.
 
 ---
 
@@ -455,7 +416,7 @@ User says: "play"
 
 ```
 User taps "Kitchen" device button
-  → POST /catt { command: "device", value: "k" } with X-Caller: kids
+  → POST /catt { command: "cast", device: "k", value: "..." } with X-Caller: kids
   → index.ts: CALLER_KV.put("ui:kids", "k"), route command to "k" DO
 
 User taps "Play"
@@ -534,8 +495,8 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 | `src/index.ts` | Per-route DO resolution via KV or body.device; X-Caller handling; device injection in state response; update `scheduled` handler |
 | `src/googleHome.ts` | Accept `deviceKey` + `env` params; read/write device via KV |
 | `src/integrations.ts` | `handleTelegram` resolves own DO stub after body parse; both handlers write to KV on device alias |
-| `src/cattHandler.ts` | Accept `deviceKey` param; use it directly for volume instead of reading `state.device` from DO |
-| `src/DeviceQueue.ts` | Remove `device` KV key from `defaultFor()`, `clearState()`, `reset` route, and `set/device` initialisation call |
+| `src/cattHandler.ts` | Accept `deviceKey` param; use it directly for volume; all DO URLs use `/device/<key>/<action>` |
+| `src/DeviceQueue.ts` | Remove `device` KV key; `deviceKey` from URL `parts[1]`; `_deviceKey` stored for `alarm()`; remove `set/device` route and `device` command |
 | `src/catt.ts` | No changes |
 | `src/urlHelper.ts` | No changes |
 | `src/oauth.ts` | No changes |

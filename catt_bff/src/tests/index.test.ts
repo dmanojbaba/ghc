@@ -152,13 +152,19 @@ describe("/catt — KV session routing", () => {
     expect(doName).toBe("k");
   });
 
-  it("device command writes resolved key to KV", async () => {
+  it("device command writes resolved key to KV and returns state", async () => {
     const kvPut = vi.fn();
     const env = makeEnv({
       CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+      DEVICE_QUEUE: {
+        idFromName: () => ({} as DurableObjectId),
+        get: () => ({ fetch: vi.fn(async () => new Response(JSON.stringify({ session: "idle" }), { headers: { "content-type": "application/json" } })) } as unknown as DurableObjectStub),
+      } as unknown as DurableObjectNamespace,
     });
-    await worker.fetch(makeCattRequest({ command: "device", value: "k" }, { "X-Caller": "kids" }), env, makeCtx());
+    const res = await worker.fetch(makeCattRequest({ command: "device", value: "k" }, { "X-Caller": "kids" }), env, makeCtx());
     expect(kvPut).toHaveBeenCalledWith("ui:kids", "k");
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.device).toBe("k");
   });
 
   it("cast with body.device updates KV session", async () => {
@@ -189,7 +195,7 @@ describe("/catt — KV session routing", () => {
   });
 });
 
-describe("/device/box/state — device injection", () => {
+describe("/device/*/state — device injection", () => {
   it("injects device from KV into state response for X-Caller: kids", async () => {
     const stateBody = JSON.stringify({ app: "default", session: "idle", queue: [] });
     const env = makeEnv({

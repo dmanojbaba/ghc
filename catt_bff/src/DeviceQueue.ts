@@ -1,8 +1,8 @@
 import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems, getParsedUrl, extractYouTubePlaylistId } from "./urlHelper";
 import {
-  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_DEVICE, DEFAULT_PLAYLIST, DEFAULT_CHANNEL, DEFAULT_SLEEP_AT,
-  resolveDevice, isAudioOnlyInput, getInputKey, getAdjacentChannel, getChannelKey, DEVICE_ID,
+  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_PLAYLIST, DEFAULT_CHANNEL, DEFAULT_SLEEP_AT,
+  resolveDevice, getAdjacentChannel, getChannelKey, DEVICE_ID,
 } from "./devices";
 
 const POLL_INTERVAL_MS   = 10_000;
@@ -59,6 +59,10 @@ export class DeviceQueue implements DurableObject {
     return defaults[key] ?? "";
   }
 
+  private deviceKey(parts: string[]): string {
+    return parts[1] ?? "";
+  }
+
   private get serverUrl(): string {
     return this.env.CATT_BACKEND_URL;
   }
@@ -81,7 +85,7 @@ export class DeviceQueue implements DurableObject {
   }
 
 
-  async enqueue(url: string, title?: string): Promise<void> {
+  async enqueue(deviceKey: string, url: string, title?: string): Promise<void> {
     this.sql.exec(
       "INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)",
       url,
@@ -89,11 +93,11 @@ export class DeviceQueue implements DurableObject {
       new Date().toISOString(),
     );
     if (this.get("session") === DEFAULT_SESSION) {
-      await this.advance();
+      await this.advance(deviceKey);
     }
   }
 
-  async advance(userInitiated = false): Promise<void> {
+  async advance(deviceKey: string, userInitiated = false): Promise<void> {
     const row = this.sql
       .exec<{ position: number; url: string; title: string | null }>(
         "SELECT position, url, title FROM queue ORDER BY position ASC LIMIT 1",
@@ -102,7 +106,7 @@ export class DeviceQueue implements DurableObject {
 
     if (!row) {
       if (userInitiated) {
-        const device = resolveDevice(this.get("device"));
+        const device = resolveDevice(deviceKey);
         await castCommand(this.serverUrl, device, "cast", getParsedUrl(DEFAULT_NEXT, this.env.REDIRECT_URL), {
           force_default: this.forceDefault(),
         }, this.secret);
@@ -113,7 +117,7 @@ export class DeviceQueue implements DurableObject {
     }
 
     this.sql.exec("DELETE FROM queue WHERE position = ?", row.position);
-    const device = resolveDevice(this.get("device"));
+    const device = resolveDevice(deviceKey);
     await castCommand(this.serverUrl, device, "cast", row.url, {
       title:         row.title ?? undefined,
       force_default: this.forceDefault(),
@@ -136,22 +140,22 @@ export class DeviceQueue implements DurableObject {
     this.set("tts",     DEFAULT_TTS);
   }
 
-  private async stopDevice(): Promise<void> {
-    const device = resolveDevice(this.get("device"));
+  private async stopDevice(deviceKey: string): Promise<void> {
+    const device = resolveDevice(deviceKey);
     await castCommand(this.serverUrl, device, "stop", undefined, undefined, this.secret);
     this.set("session", DEFAULT_SESSION);
     this.set("sleep_at", DEFAULT_SLEEP_AT);
     await this.state.storage.deleteAlarm();
   }
 
-  async stopAndClearState(): Promise<void> {
-    const device = resolveDevice(this.get("device"));
+  async stopAndClearState(deviceKey: string): Promise<void> {
+    const device = resolveDevice(deviceKey);
     await castCommand(this.serverUrl, device, "stop", undefined, undefined, this.secret);
     await this.clearState();
   }
 
-  async shuffle(playlistId: string, startVideoId?: string): Promise<void> {
-    const device = resolveDevice(this.get("device"));
+  async shuffle(deviceKey: string, playlistId: string, startVideoId?: string): Promise<void> {
+    const device = resolveDevice(deviceKey);
     let first: string;
     let firstTitle: string | null;
     let rest: Array<{ url: string; title: string | null }>;
@@ -176,8 +180,8 @@ export class DeviceQueue implements DurableObject {
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
   }
 
-  private async playSite(arg: string, host: string): Promise<void> {
-    const device = resolveDevice(this.get("device"));
+  private async playSite(deviceKey: string, arg: string, host: string): Promise<void> {
+    const device = resolveDevice(deviceKey);
     await castCommand(this.serverUrl, device, "stop", undefined, undefined, this.secret);
     this.sql.exec("DELETE FROM queue");
     await this.state.storage.deleteAlarm();
@@ -195,9 +199,9 @@ export class DeviceQueue implements DurableObject {
     }
   }
 
-  async playPrev(): Promise<void> {
+  async playPrev(deviceKey: string): Promise<void> {
     const rawPrev = this.get("prev");
-    const device  = resolveDevice(this.get("device"));
+    const device  = resolveDevice(deviceKey);
 
     if (rawPrev === "tts") {
       await castCommand(this.serverUrl, device, "tts", this.get("tts"), undefined, this.secret);
@@ -217,14 +221,15 @@ export class DeviceQueue implements DurableObject {
   }
 
   async alarm(): Promise<void> {
+    const deviceKey = this.get("_deviceKey");
     const sleepAt = this.get("sleep_at");
     if (sleepAt && Date.now() >= Number(sleepAt)) {
-      await this.stopAndClearState();
+      await this.stopAndClearState(deviceKey);
       return;
     }
 
     if (this.get("session") === DEFAULT_SESSION) return;
-    const device = resolveDevice(this.get("device"));
+    const device = resolveDevice(deviceKey);
 
     try {
       const info        = await getInfo(this.serverUrl, device, this.secret);
@@ -233,7 +238,7 @@ export class DeviceQueue implements DurableObject {
       const currentTime = info.data?.current_time ?? 0;
 
       if (state === "IDLE" || state === "UNKNOWN") {
-        await this.advance();
+        await this.advance(deviceKey);
         return;
       }
 
@@ -271,7 +276,7 @@ export class DeviceQueue implements DurableObject {
         const statusRes = await getStatus(this.serverUrl, device, this.secret);
         const state     = statusRes.data?.player_state ?? "UNKNOWN";
         if (state === "IDLE" || state === "UNKNOWN") {
-          await this.advance();
+          await this.advance(deviceKey);
           return;
         }
       } catch {
@@ -308,8 +313,12 @@ export class DeviceQueue implements DurableObject {
 
   async fetch(request: Request): Promise<Response> {
     const url   = new URL(request.url);
-    const parts = url.pathname.split("/").filter(Boolean); // ["device", "box", action, ...rest]
+    const parts = url.pathname.split("/").filter(Boolean); // ["device", deviceKey, action, ...rest]
+    const deviceKey = parts[1] ?? "";
     const action = parts[2] ?? "";
+
+    // Persist deviceKey so alarm() can use it
+    if (deviceKey) this.set("_deviceKey", deviceKey);
 
     switch (action) {
       case "state":
@@ -321,25 +330,25 @@ export class DeviceQueue implements DurableObject {
         });
 
       case "prev":
-        await this.playPrev();
+        await this.playPrev(deviceKey);
         return new Response("ok");
 
       case "next":
-        await this.advance(true);
+        await this.advance(deviceKey, true);
         return new Response("ok");
 
       case "play": {
-        const device = resolveDevice(this.get("device"));
+        const device = resolveDevice(deviceKey);
         await castCommand(this.serverUrl, device, "play_toggle", undefined, undefined, this.secret);
         return new Response("ok");
       }
 
       case "stop":
-        await this.stopDevice();
+        await this.stopDevice(deviceKey);
         return new Response("ok");
 
       case "off":
-        await this.stopAndClearState();
+        await this.stopAndClearState(deviceKey);
         return new Response("ok");
 
       case "clear":
@@ -349,6 +358,7 @@ export class DeviceQueue implements DurableObject {
       case "reset":
         await this.clearState();
         this.set("app", DEFAULT_APP);
+        this.sql.exec("DELETE FROM history");
         return new Response("ok");
 
       case "cast": {
@@ -356,56 +366,48 @@ export class DeviceQueue implements DurableObject {
         const method  = request.method.toUpperCase();
         if (method === "POST") {
           const body = await request.json() as { url: string; title?: string };
-          await this.enqueue(body.url, body.title);
+          await this.enqueue(deviceKey, body.url, body.title);
         } else {
-          await this.enqueue(rawUrl);
+          await this.enqueue(deviceKey, rawUrl);
         }
         return new Response("ok");
       }
 
       case "site": {
         const rawArg = decodeURIComponent(parts.slice(3).join("/"));
-        await this.playSite(rawArg, new URL(request.url).host);
+        await this.playSite(deviceKey, rawArg, new URL(request.url).host);
         return new Response("ok");
       }
 
       case "catt": {
         const body = await request.json() as { command: string; value?: string; device?: string };
-        const cmd        = body.command;
-        const val        = body.value?.trim() ?? "";
-        const deviceArg  = body.device ?? "";
+        const cmd       = body.command;
+        const val       = body.value?.trim() ?? "";
+        const deviceArg = body.device ?? "";
 
-        if (deviceArg && deviceArg !== "queue") {
-          const key = getInputKey(DEVICE_ID, deviceArg, null);
-          if (key) {
-            this.set("device", key);
-            if (isAudioOnlyInput(DEVICE_ID, key)) this.set("app", DEFAULT_APP);
-          }
-        }
-
-        const device = resolveDevice(this.get("device"));
+        const device = resolveDevice(deviceKey);
 
         if (cmd === "cast") {
           const hasValue = !!body.value?.trim();
           if (!hasValue) {
-            await this.advance(true);
+            await this.advance(deviceKey, true);
           } else if (deviceArg === "queue") {
             const playlist = extractYouTubePlaylistId(val);
             if (playlist && this.env.YOUTUBE_API_KEY) {
               const { first, firstTitle, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlist.playlistId, this.env.REDIRECT_URL, 50, playlist.videoId ?? undefined);
-              await this.enqueue(first, firstTitle ?? undefined);
+              await this.enqueue(deviceKey, first, firstTitle ?? undefined);
               const now = new Date().toISOString();
               for (const item of rest) {
                 this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", item.url, item.title, now);
               }
             } else {
-              await this.enqueue(getParsedUrl(val, this.env.REDIRECT_URL));
+              await this.enqueue(deviceKey, getParsedUrl(val, this.env.REDIRECT_URL));
             }
           } else {
             const playlist = extractYouTubePlaylistId(val);
             if (playlist && this.env.YOUTUBE_API_KEY) {
               this.set("playlist", playlist.playlistId);
-              await this.shuffle(playlist.playlistId, playlist.videoId ?? undefined);
+              await this.shuffle(deviceKey, playlist.playlistId, playlist.videoId ?? undefined);
             } else {
               const parsedUrl = getParsedUrl(val, this.env.REDIRECT_URL);
               this.sql.exec("DELETE FROM queue");
@@ -421,7 +423,7 @@ export class DeviceQueue implements DurableObject {
           }
 
         } else if (cmd === "site") {
-          await this.playSite(val, new URL(request.url).host);
+          await this.playSite(deviceKey, val, new URL(request.url).host);
 
         } else {
           return new Response("unknown command", { status: 400 });
@@ -444,7 +446,7 @@ export class DeviceQueue implements DurableObject {
         }
         await this.clearState();
         this.set("channel", channelKey);
-        const device = resolveDevice(this.get("device"));
+        const device = resolveDevice(deviceKey);
         await castCommand(this.serverUrl, device, "cast", getParsedUrl(channelKey, this.env.REDIRECT_URL), {
           force_default: this.forceDefault(),
         }, this.secret);
@@ -457,17 +459,21 @@ export class DeviceQueue implements DurableObject {
         const position = Number(parts[3]);
         if (isNaN(position)) return new Response("invalid position", { status: 400 });
         this.sql.exec("DELETE FROM queue WHERE position < ?", position);
-        await this.advance(true);
+        await this.advance(deviceKey, true);
         return new Response("ok");
       }
 
       case "shuffle": {
         const playlistId = this.get("playlist");
-        if (playlistId) await this.shuffle(playlistId);
+        if (playlistId) await this.shuffle(deviceKey, playlistId);
         return new Response("ok");
       }
 
       case "history": {
+        if (parts[3] === "clear") {
+          this.sql.exec("DELETE FROM history");
+          return new Response("ok");
+        }
         const rows = this.sql
           .exec<{ position: number; url: string; title: string | null; played_at: string }>(
             "SELECT position, url, title, played_at FROM history ORDER BY position DESC",
@@ -502,14 +508,14 @@ export class DeviceQueue implements DurableObject {
 
       case "rewind": {
         const seconds = Number(parts[3] ?? 30);
-        const device = resolveDevice(this.get("device"));
+        const device = resolveDevice(deviceKey);
         await castCommand(this.serverUrl, device, "rewind", seconds, undefined, this.secret);
         return new Response("ok");
       }
 
       case "ffwd": {
         const seconds = Number(parts[3] ?? 30);
-        const device = resolveDevice(this.get("device"));
+        const device = resolveDevice(deviceKey);
         await castCommand(this.serverUrl, device, "ffwd", seconds, undefined, this.secret);
         return new Response("ok");
       }
@@ -517,7 +523,7 @@ export class DeviceQueue implements DurableObject {
       case "mute":
       case "unmute": {
         const muted = action === "unmute" ? false : parts[3] !== "false";
-        const device = resolveDevice(this.get("device"));
+        const device = resolveDevice(deviceKey);
         await castCommand(this.serverUrl, device, "volumemute", muted, undefined, this.secret);
         return new Response("ok");
       }
@@ -525,12 +531,7 @@ export class DeviceQueue implements DurableObject {
       case "set": {
         const key   = parts[3];
         const value = parts[4] ?? "";
-        if (key) {
-          this.set(key, value);
-          if (key === "device" && isAudioOnlyInput("box", value)) {
-            this.set("app", DEFAULT_APP);
-          }
-        }
+        if (key) this.set(key, value);
         return new Response("ok");
       }
 

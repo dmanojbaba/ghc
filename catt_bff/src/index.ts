@@ -3,7 +3,7 @@ import { handleFulfillment, handleSync, handleQuery } from "./googleHome";
 import { handleOAuthAuth, handleOAuthToken } from "./oauth";
 import { handleSlack, handleTelegram } from "./integrations";
 import { handleCatt } from "./cattHandler";
-import { DEVICE_ID, DEFAULT_APP, DEFAULT_DEVICE, getAllDeviceKeys, getDeviceList, getChannelList, getInputKey } from "./devices";
+import { DEVICE_ID, DEFAULT_DEVICE, getAllDeviceKeys, getDeviceList, getChannelList, getInputKey } from "./devices";
 
 export { DeviceQueue };
 
@@ -87,9 +87,21 @@ export default {
       const sessionKey = resolveSessionKey(request, body);
       let deviceKey = await getSessionDeviceKey(env, sessionKey);
 
+      if (body.command === "device") {
+        const resolvedKey = getInputKey(DEVICE_ID, body.value ?? "", null);
+        if (resolvedKey) {
+          await env.CALLER_KV.put(sessionKey, resolvedKey);
+          deviceKey = resolvedKey;
+        }
+        const stub = getDoStub(env, deviceKey);
+        const stateRes = await stub.fetch(new Request(`https://do/device/${deviceKey}/state`));
+        const state = await stateRes.json() as Record<string, unknown>;
+        return Response.json({ device: deviceKey, ...state }, { headers: { "cache-control": "no-store" } });
+      }
+
       const isQueueDevice = body.device === "queue";
-      const resolvedKey = isQueueDevice ? null : getInputKey(DEVICE_ID, body.device ?? body.value ?? "", null);
-      if (resolvedKey && (body.command === "device" || (body.command === "cast" && body.device))) {
+      const resolvedKey = isQueueDevice ? null : getInputKey(DEVICE_ID, body.device ?? "", null);
+      if (resolvedKey && body.command === "cast" && body.device) {
         await env.CALLER_KV.put(sessionKey, resolvedKey);
         deviceKey = resolvedKey;
       }
@@ -150,7 +162,11 @@ export default {
       const sessionKey = xcaller === "kids" ? "ui:kids" : "ui:admin";
       const deviceKey = await getSessionDeviceKey(env, sessionKey);
       const stub = getDoStub(env, deviceKey);
-      const res = await stub.fetch(request);
+      // Rewrite /device/<any>/<action> → /device/<deviceKey>/<action> (frontend uses /device/box/ as a fixed placeholder)
+      const action = path.replace(/^\/device\/[^/]+/, "");
+      const doUrl = `https://do/device/${deviceKey}${action}`;
+      const doReq = new Request(doUrl, { method: request.method, headers: request.headers, body: request.body });
+      const res = await stub.fetch(doReq);
       if (path.endsWith("/state") && res.ok) {
         const state = await res.json() as Record<string, unknown>;
         return Response.json({ device: deviceKey, ...state }, { headers: { "cache-control": "no-store" } });
@@ -164,8 +180,13 @@ export default {
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     for (const key of getAllDeviceKeys(DEVICE_ID)) {
       const stub = getDoStub(env, key);
-      await stub.fetch(new Request("https://do/device/box/clear"));
-      await stub.fetch(new Request("https://do/device/box/set/app/" + DEFAULT_APP));
+      await stub.fetch(new Request(`https://do/device/${key}/reset`));
     }
+    let cursor: string | undefined;
+    do {
+      const result = await env.CALLER_KV.list({ cursor });
+      await Promise.all(result.keys.map((k) => env.CALLER_KV.put(k.name, DEFAULT_DEVICE)));
+      cursor = result.list_complete ? undefined : result.cursor;
+    } while (cursor);
   },
 };

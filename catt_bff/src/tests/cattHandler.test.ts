@@ -36,36 +36,28 @@ beforeEach(() => {
 });
 
 describe("handleCatt — jump command", () => {
-  it("routes jump to /device/box/jump/:position", async () => {
+  it("routes jump to /device/<key>/jump/:position", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "jump", value: "42" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/jump/42");
+    expect(url).toContain("/device//jump/42");
   });
 });
 
 describe("handleCatt — tts command", () => {
-  it("routes tts to /device/box/site/:value", async () => {
+  it("routes tts to /device/<key>/site/:value", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "tts", value: "hello world" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/site/");
+    expect(url).toContain("/device//site/");
     expect(decodeURIComponent(url)).toContain("hello world");
   });
 
-  it("routes speak to /device/box/site/:value", async () => {
+  it("routes broadcast to /device/<key>/site/:value", async () => {
     const stub = makeDoStub();
-    await handleCatt(makeRequest({ command: "speak", value: "hello world" }), makeEnv(), stub);
+    await handleCatt(makeRequest({ command: "broadcast", value: "hello world" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/site/");
-    expect(decodeURIComponent(url)).toContain("hello world");
-  });
-
-  it("routes talk to /device/box/site/:value", async () => {
-    const stub = makeDoStub();
-    await handleCatt(makeRequest({ command: "talk", value: "hello world" }), makeEnv(), stub);
-    const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/site/");
+    expect(url).toContain("/device//site/");
     expect(decodeURIComponent(url)).toContain("hello world");
   });
 
@@ -73,76 +65,68 @@ describe("handleCatt — tts command", () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "tts", value: "" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/site/");
+    expect(url).toContain("/device//site/");
   });
 });
 
 describe("handleCatt — cast channel redirect", () => {
-  it("redirects cast of a known channel key to /device/box/channel/:key", async () => {
+  it("redirects cast of a known channel key to /device/<key>/channel/:key", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "cast", value: "ping" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/channel/ping");
+    expect(url).toContain("/device//channel/ping");
   });
 
-  it("redirects cast of a channel name (case-insensitive) to /device/box/channel/:key", async () => {
+  it("redirects cast of a channel name (case-insensitive) to /device/<key>/channel/:key", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "cast", value: "Ping" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/channel/ping");
+    expect(url).toContain("/device//channel/ping");
   });
 
-  it("redirects cast with device=queue of a known channel key to /device/box/channel/:key", async () => {
+  it("redirects cast with device=queue of a known channel key to /device/<key>/channel/:key", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "cast", device: "queue", value: "ping" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/channel/ping");
+    expect(url).toContain("/device//channel/ping");
   });
 
-  it("redirects cast with device=queue of a channel name (case-insensitive) to /device/box/channel/:key", async () => {
+  it("redirects cast with device=queue of a channel name (case-insensitive) to /device/<key>/channel/:key", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "cast", device: "queue", value: "Ping" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/channel/ping");
+    expect(url).toContain("/device//channel/ping");
   });
 
   it("does not redirect cast of a URL to channel route", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "cast", value: "https://example.com/video" }), makeEnv(), stub);
     const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as Request;
-    expect(call.url).toContain("/device/box/catt");
+    expect(call.url).toContain("/device//catt");
   });
 
   it("does not redirect cast of an unknown value to channel route", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "cast", value: "some random search" }), makeEnv(), stub);
     const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as Request;
-    expect(call.url).toContain("/device/box/catt");
+    expect(call.url).toContain("/device//catt");
   });
 });
 
 describe("handleCatt — playlist command", () => {
-  it("routes playlist with no value to /device/box/shuffle", async () => {
+  it("routes playlist with no value to /device/<key>/shuffle", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "playlist" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/shuffle");
+    expect(url).toContain("/device//shuffle");
   });
 
-  it("sets device before shuffle when device is passed and no value", async () => {
+  it("routes playlist with no value to shuffle (device token ignored)", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "playlist", device: "k" }), makeEnv(), stub);
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
-    expect(calls[0]).toContain("/set/device/k");
-    expect(calls[1]).toContain("/device/box/shuffle");
-  });
-
-  it("skips set/device when no device passed", async () => {
-    const stub = makeDoStub();
-    await handleCatt(makeRequest({ command: "playlist" }), makeEnv(), stub);
-    const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toContain("/device/box/shuffle");
+    expect(calls[0]).toContain("/device//shuffle");
   });
 
   it("routes playlist with value to /catt (cast) route", async () => {
@@ -156,31 +140,31 @@ describe("handleCatt — playlist command", () => {
     expect(body.value).toBe("https://www.youtube.com/playlist?list=PLabc");
   });
 
-  it("sets device then routes to /catt when both device and value passed", async () => {
+  it("routes playlist with value directly to /catt (device token ignored)", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "playlist", device: "k", value: "https://www.youtube.com/playlist?list=PLabc" }), makeEnv(), stub);
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0].url).toContain("/set/device/k");
+    expect(calls).toHaveLength(1);
     const cattCall = calls.find((c: unknown[]) => (c[0] as Request).url.includes("/catt"));
     expect(cattCall).toBeDefined();
   });
 });
 
 describe("handleCatt — state command", () => {
-  it("routes state to /device/box/state", async () => {
+  it("routes state to /device/<key>/state", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "state" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/state");
+    expect(url).toContain("/device//state");
   });
 });
 
 describe("handleCatt — history command", () => {
-  it("routes history to /device/box/history", async () => {
+  it("routes history to /device/<key>/history", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "history" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/history");
+    expect(url).toContain("/device//history");
   });
 });
 
@@ -228,17 +212,17 @@ describe("handleCatt — volume command", () => {
 });
 
 describe("handleCatt — stop command", () => {
-  it("routes stop to /device/box/stop (not /off)", async () => {
+  it("routes stop to /device/<key>/stop (not /off)", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "stop" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device/box/stop");
+    expect(url).toContain("/device//stop");
     expect(url).not.toContain("/off");
   });
 });
 
 describe("handleCatt — app command", () => {
-  it("routes app command to /device/box/set/app/:key", async () => {
+  it("routes app command to /device/<key>/set/app/:key", async () => {
     const stub = makeDoStub();
     await handleCatt(makeRequest({ command: "app", value: "youtube" }), makeEnv(), stub);
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
