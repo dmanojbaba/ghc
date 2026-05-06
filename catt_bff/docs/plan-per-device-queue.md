@@ -579,7 +579,7 @@ Retired. No code routes to `getDoStub(env, "box")` after this change. Any existi
 6. Update `cattHandler.ts` — accept `deviceKey` param, remove `state.device` DO read for volume
 7. Update `src/tests/index.test.ts` and `src/tests/cattHandler.test.ts` with new tests (see test changes section)
 8. Run `npm test` — all tests must pass
-**Status**: Not Started
+**Status**: Complete
 
 ---
 

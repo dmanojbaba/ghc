@@ -4,18 +4,18 @@ import { castCommand } from "./catt";
 const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", "reset"]);
 const DO_VALUE_COMMANDS = new Set(["rewind", "ffwd", "sleep", "mute"]);
 
-export async function handleCatt(request: Request, env: Env, doStub: DurableObjectStub): Promise<Response> {
+export async function handleCatt(request: Request, env: Env, doStub: DurableObjectStub, deviceKey = ""): Promise<Response> {
   const body = await request.json() as { command?: string; value?: string; device?: string };
   if (!body.command) return new Response("'command' is required", { status: 400 });
   try {
-    return await handleCattInner(body as { command: string; value?: string; device?: string }, env, doStub);
+    return await handleCattInner(body as { command: string; value?: string; device?: string }, env, doStub, deviceKey);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Command failed";
     return Response.json({ error: message }, { status: 500 });
   }
 }
 
-async function handleCattInner(body: { command: string; value?: string; device?: string }, env: Env, doStub: DurableObjectStub): Promise<Response> {
+async function handleCattInner(body: { command: string; value?: string; device?: string }, env: Env, doStub: DurableObjectStub, deviceKey: string): Promise<Response> {
 
   if (DO_COMMANDS.has(body.command)) {
     return doStub.fetch(new Request(`https://do/device/box/${body.command}`));
@@ -55,13 +55,7 @@ async function handleCattInner(body: { command: string; value?: string; device?:
 
   if (body.command === "volume") {
     const val = body.value ?? "";
-    let deviceKey = body.device ?? "";
-    if (!deviceKey) {
-      const stateRes = await doStub.fetch(new Request("https://do/device/box/state"));
-      const state = await stateRes.json() as { device?: string };
-      deviceKey = state.device ?? "";
-    }
-    const device = resolveDevice(deviceKey);
+    const device = resolveDevice(body.device ?? deviceKey);
     if (val === "up" || val === "down") {
       await castCommand(env.CATT_BACKEND_URL, device, `volume${val}`, undefined, undefined, env.CATT_BACKEND_SECRET);
     } else {

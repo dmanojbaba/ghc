@@ -3,7 +3,7 @@ import { handleFulfillment, handleSync, handleQuery } from "./googleHome";
 import { handleOAuthAuth, handleOAuthToken } from "./oauth";
 import { handleSlack, handleTelegram } from "./integrations";
 import { handleCatt } from "./cattHandler";
-import { DEVICE_ID, DEFAULT_APP, DEFAULT_DEVICE, getDeviceList, getChannelList } from "./devices";
+import { DEVICE_ID, DEFAULT_APP, DEFAULT_DEVICE, getAllDeviceKeys, getDeviceList, getChannelList, getInputKey } from "./devices";
 
 export { DeviceQueue };
 
@@ -19,6 +19,17 @@ function escapeHtml(text: string): string {
 function getDoStub(env: Env, deviceId: string): DurableObjectStub {
   const id = env.DEVICE_QUEUE.idFromName(deviceId);
   return env.DEVICE_QUEUE.get(id);
+}
+
+async function getSessionDeviceKey(env: Env, sessionKey: string): Promise<string> {
+  return (await env.CALLER_KV.get(sessionKey)) ?? DEFAULT_DEVICE;
+}
+
+function resolveSessionKey(request: Request, body: { caller?: string }): string {
+  const xcaller = request.headers.get("X-Caller");
+  if (xcaller === "kids") return "ui:kids";
+  if (xcaller === "admin") return "ui:admin";
+  return `http:${body.caller ?? "default"}`;
 }
 
 export default {
@@ -38,7 +49,8 @@ export default {
 
     // Google Home fulfillment
     if (path === "/fulfillment" && method === "POST") {
-      return handleFulfillment(request, env, getDoStub(env, DEVICE_ID));
+      const deviceKey = await getSessionDeviceKey(env, "googlehome:all");
+      return handleFulfillment(request, env, getDoStub(env, deviceKey));
     }
 
     // Debug: verify SYNC response without going through Google
@@ -71,12 +83,31 @@ export default {
 
     // Ad-hoc POST endpoint
     if (path === "/catt" && method === "POST") {
-      return handleCatt(request, env, getDoStub(env, DEVICE_ID));
+      const body = await request.clone().json() as { command?: string; value?: string; device?: string; caller?: string };
+      const sessionKey = resolveSessionKey(request, body);
+      let deviceKey = await getSessionDeviceKey(env, sessionKey);
+
+      const isQueueDevice = body.device === "queue";
+      const resolvedKey = isQueueDevice ? null : getInputKey(DEVICE_ID, body.device ?? body.value ?? "", null);
+      if (resolvedKey && (body.command === "device" || (body.command === "cast" && body.device))) {
+        await env.CALLER_KV.put(sessionKey, resolvedKey);
+        deviceKey = resolvedKey;
+      }
+
+      const doStub = getDoStub(env, deviceKey);
+      const res = await handleCatt(request, env, doStub, deviceKey);
+
+      if (body.command === "reset") {
+        await env.CALLER_KV.put(sessionKey, DEFAULT_DEVICE);
+      }
+
+      return res;
     }
 
     // Slack
     if (path === "/slack" && method === "POST") {
-      return handleSlack(request, env, ctx, getDoStub(env, DEVICE_ID));
+      const deviceKey = await getSessionDeviceKey(env, "slack:all");
+      return handleSlack(request, env, ctx, getDoStub(env, deviceKey));
     }
 
     // Telegram
@@ -113,20 +144,28 @@ export default {
       return new Response(html, { headers: { "content-type": "text/html;charset=UTF-8" } });
     }
 
-    // Device routes — delegate to DeviceQueue DO
-    // /device/:name/*  or legacy /g* paths
+    // Device routes — delegate to per-device DO based on caller session
     if (path.startsWith("/device/")) {
-      const stub = getDoStub(env, DEVICE_ID);
-      return stub.fetch(request);
+      const xcaller = request.headers.get("X-Caller");
+      const sessionKey = xcaller === "kids" ? "ui:kids" : "ui:admin";
+      const deviceKey = await getSessionDeviceKey(env, sessionKey);
+      const stub = getDoStub(env, deviceKey);
+      const res = await stub.fetch(request);
+      if (path.endsWith("/state") && res.ok) {
+        const state = await res.json() as Record<string, unknown>;
+        return Response.json({ device: deviceKey, ...state }, { headers: { "cache-control": "no-store" } });
+      }
+      return res;
     }
 
     return new Response("not found", { status: 404 });
   },
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
-    const stub = getDoStub(env, DEVICE_ID);
-    await stub.fetch(new Request("https://do/device/box/clear"));
-    await stub.fetch(new Request("https://do/device/box/set/app/" + DEFAULT_APP));
-    await stub.fetch(new Request("https://do/device/box/set/device/" + DEFAULT_DEVICE));
+    for (const key of getAllDeviceKeys(DEVICE_ID)) {
+      const stub = getDoStub(env, key);
+      await stub.fetch(new Request("https://do/device/box/clear"));
+      await stub.fetch(new Request("https://do/device/box/set/app/" + DEFAULT_APP));
+    }
   },
 };
