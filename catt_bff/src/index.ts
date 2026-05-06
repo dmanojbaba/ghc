@@ -174,6 +174,7 @@ export default {
       const stub = getDoStub(env, deviceKey);
       // Rewrite /device/<any>/<action> → /device/<deviceKey>/<action> (frontend uses /device/box/ as a fixed placeholder)
       const action = path.replace(/^\/device\/[^/]+/, "");
+      console.log(`[device] caller=${xcaller ?? "none"} session=${sessionKey} device=${deviceKey} action=${action}`);
       const doUrl = `https://do/device/${deviceKey}${action}`;
       const doReq = new Request(doUrl, { method: request.method, headers: request.headers, body: request.body });
       const res = await stub.fetch(doReq);

@@ -47,6 +47,11 @@ function doUrl(deviceKey: string, path: string): string {
   return `https://do/device/${deviceKey}${path}`;
 }
 
+async function doFetch(stub: DurableObjectStub, req: Request): Promise<void> {
+  const res = await stub.fetch(req);
+  if (!res.ok) throw new Error(`DO error: ${res.status}`);
+}
+
 async function dispatchCommand(
   command: string,
   device: string,
@@ -56,21 +61,21 @@ async function dispatchCommand(
   sessionDeviceKey: string,
 ): Promise<string> {
   if (DO_COMMANDS.has(command)) {
-    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/${command}`)));
+    await doFetch(doStub, new Request(doUrl(sessionDeviceKey, `/${command}`)));
     return command;
   }
   if (command === "rewind" || command === "ffwd") {
     const seconds = rawValue.trim() || device;
-    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/${command}/${encodeURIComponent(seconds)}`)));
+    await doFetch(doStub, new Request(doUrl(sessionDeviceKey, `/${command}/${encodeURIComponent(seconds)}`)));
     return command;
   }
   if (command === "sleep") {
     const arg = rawValue.trim() || device;
-    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/sleep/${encodeURIComponent(arg)}`)));
+    await doFetch(doStub, new Request(doUrl(sessionDeviceKey, `/sleep/${encodeURIComponent(arg)}`)));
     return "sleep";
   }
   if (command === "tts" || command === "broadcast" || command === "speak" || command === "talk") {
-    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/site/${encodeURIComponent(rawValue)}`)));
+    await doFetch(doStub, new Request(doUrl(sessionDeviceKey, `/site/${encodeURIComponent(rawValue)}`)));
     return "tts";
   }
   if (command === "volume") {
@@ -85,30 +90,30 @@ async function dispatchCommand(
   }
   if (command === "channel") {
     const arg = rawValue.trim() || device;
-    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/channel/${encodeURIComponent(arg)}`)));
+    await doFetch(doStub, new Request(doUrl(sessionDeviceKey, `/channel/${encodeURIComponent(arg)}`)));
     return "channel";
   }
   if (command === "playlist") {
     if (rawValue) {
-      await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/catt"), {
+      await doFetch(doStub, new Request(doUrl(sessionDeviceKey, "/catt"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ command: "cast", value: rawValue }),
       }));
     } else {
-      await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/shuffle")));
+      await doFetch(doStub, new Request(doUrl(sessionDeviceKey, "/shuffle")));
     }
     return "playlist";
   }
   if (command === "mute") {
     const muted = (rawValue.trim() || "true") !== "false";
-    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/mute/${muted}`)));
+    await doFetch(doStub, new Request(doUrl(sessionDeviceKey, `/mute/${muted}`)));
     return "mute";
   }
   if (command === "queue") {
     const targetKey = device && device in INPUT_TO_DEVICE ? (getInputKey(DEVICE_ID, device, null) ?? sessionDeviceKey) : sessionDeviceKey;
     const targetStub = targetKey !== sessionDeviceKey ? getDoStub(env, targetKey) : doStub;
-    await targetStub.fetch(new Request(doUrl(targetKey, "/enqueue"), {
+    await doFetch(targetStub, new Request(doUrl(targetKey, "/enqueue"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ value: rawValue.trim() }),
@@ -119,10 +124,10 @@ async function dispatchCommand(
   const val = rawValue.trim();
   const channelKey = val && !val.startsWith("http") ? getChannelKey(DEVICE_ID, val) : null;
   if (channelKey) {
-    await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/channel/${encodeURIComponent(channelKey)}`)));
+    await doFetch(doStub, new Request(doUrl(sessionDeviceKey, `/channel/${encodeURIComponent(channelKey)}`)));
     return "channel";
   }
-  await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/catt"), {
+  await doFetch(doStub, new Request(doUrl(sessionDeviceKey, "/catt"), {
     method: "POST",
     body: JSON.stringify({ command: "cast", device, value: val }),
   }));
