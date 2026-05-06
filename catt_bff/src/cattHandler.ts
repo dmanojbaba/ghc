@@ -62,7 +62,10 @@ async function handleCattInner(body: { command: string; value?: string; device?:
   }
 
   if (body.command === "state") {
-    return doStub.fetch(new Request(doUrl(deviceKey, "/state")));
+    const res = await doStub.fetch(new Request(doUrl(deviceKey, "/state")));
+    if (!res.ok) return res;
+    const state = await res.json() as Record<string, unknown>;
+    return Response.json({ device: deviceKey, ...state }, { headers: { "cache-control": "no-store" } });
   }
 
   if (body.command === "history") {

@@ -308,8 +308,6 @@ export class DeviceQueue implements DurableObject {
     const deviceKey = parts[1] ?? "";
     const action = parts[2] ?? "";
 
-    console.log(`[DO.fetch] device=${deviceKey} action=${action} hasUrl=${!!this.env.CATT_BACKEND_URL} hasSecret=${!!this.env.CATT_BACKEND_SECRET}`);
-
     // Persist deviceKey so alarm() can use it
     if (deviceKey) this.set("_deviceKey", deviceKey);
 

@@ -137,11 +137,15 @@ describe("handleCatt — playlist command", () => {
 });
 
 describe("handleCatt — state command", () => {
-  it("routes state to /device/<key>/state", async () => {
-    const stub = makeDoStub();
-    await handleCatt(makeRequest({ command: "state" }), makeEnv(), stub);
+  it("routes state to /device/<key>/state and injects device key", async () => {
+    const doState = { session: "idle", app: "default" };
+    const stub = { fetch: vi.fn(async () => new Response(JSON.stringify(doState), { headers: { "content-type": "application/json" } })) } as unknown as DurableObjectStub;
+    const res = await handleCatt(makeRequest({ command: "state" }), makeEnv(), stub, "o");
     const url = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0].url;
-    expect(url).toContain("/device//state");
+    expect(url).toContain("/device/o/state");
+    const json = await res.json() as Record<string, unknown>;
+    expect(json.device).toBe("o");
+    expect(json.session).toBe("idle");
   });
 });
 

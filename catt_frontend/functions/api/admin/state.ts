@@ -8,10 +8,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const denied = await guardCookie(request, ["admin"], env.UI_COOKIE_SECRET, maxAgeDays);
   if (denied) return denied;
 
-  const headers = { "X-API-Key": env.CATT_API_KEY, "X-Caller": "admin" };
+  const headers = { "Content-Type": "application/json", "X-API-Key": env.CATT_API_KEY, "X-Caller": "admin" };
   const [stateRes, historyRes] = await Promise.all([
-    fetchWithTimeout(`${env.CATT_BFF_URL}/device/box/state`, { headers }),
-    fetchWithTimeout(`${env.CATT_BFF_URL}/device/box/history`, { headers }),
+    fetchWithTimeout(`${env.CATT_BFF_URL}/catt`, { method: "POST", headers, body: JSON.stringify({ command: "state" }) }),
+    fetchWithTimeout(`${env.CATT_BFF_URL}/catt`, { method: "POST", headers, body: JSON.stringify({ command: "history" }) }),
   ]);
 
   if (!stateRes.ok) return stateRes;

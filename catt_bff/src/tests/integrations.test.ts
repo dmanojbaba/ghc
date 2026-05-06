@@ -137,13 +137,13 @@ describe("handleSlack — response", () => {
     expect(ctx.waitUntil).toHaveBeenCalledOnce();
   });
 
-  it("state returns DO state JSON synchronously", async () => {
+  it("state returns DO state JSON synchronously with device injected", async () => {
     const env = makeEnv();
     const ctx = makeCtx();
-    const state = { session: "idle", app: "default", device: "otv" };
+    const state = { session: "idle", app: "default" };
     const stub = { fetch: vi.fn(async () => new Response(JSON.stringify(state))) } as unknown as DurableObjectStub;
     const request = await makeSlackRequest("state", env);
-    const res = await handleSlack(request, env, ctx, stub);
+    const res = await handleSlack(request, env, ctx, stub, "otv");
     expect(res.status).toBe(200);
     expect(ctx.waitUntil).not.toHaveBeenCalled();
     const text = await res.text();
@@ -224,7 +224,7 @@ describe("handleSlack — state queue truncation", () => {
   it("truncates queue to 5 items with a count suffix when queue has more than 5 items", async () => {
     const env = makeEnv();
     const queue = Array.from({ length: 10 }, (_, i) => ({ position: i, url: `https://example.com/${i}` }));
-    const state = { session: "idle", device: "o", queue };
+    const state = { session: "idle", queue };
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if (req.url.includes("/state")) return new Response(JSON.stringify(state));
@@ -232,9 +232,10 @@ describe("handleSlack — state queue truncation", () => {
       }),
     } as unknown as DurableObjectStub;
     const request = await makeSlackRequest("state", env);
-    const res = await handleSlack(request, env, makeCtx(), stub);
+    const res = await handleSlack(request, env, makeCtx(), stub, "o");
     const text = await res.text();
     const json = JSON.parse(text.replace(/```\n?/g, ""));
+    expect(json.device).toBe("o");
     expect(json.queue).toHaveLength(6);
     expect(json.queue[5]).toBe("… 5 more");
   });
@@ -242,7 +243,7 @@ describe("handleSlack — state queue truncation", () => {
   it("does not truncate queue when 5 or fewer items", async () => {
     const env = makeEnv();
     const queue = Array.from({ length: 5 }, (_, i) => ({ position: i, url: `https://example.com/${i}` }));
-    const state = { session: "idle", device: "o", queue };
+    const state = { session: "idle", queue };
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if (req.url.includes("/state")) return new Response(JSON.stringify(state));
@@ -250,9 +251,10 @@ describe("handleSlack — state queue truncation", () => {
       }),
     } as unknown as DurableObjectStub;
     const request = await makeSlackRequest("state", env);
-    const res = await handleSlack(request, env, makeCtx(), stub);
+    const res = await handleSlack(request, env, makeCtx(), stub, "o");
     const text = await res.text();
     const json = JSON.parse(text.replace(/```\n?/g, ""));
+    expect(json.device).toBe("o");
     expect(json.queue).toHaveLength(5);
   });
 });
@@ -261,7 +263,7 @@ describe("handleTelegram — state queue truncation", () => {
   it("truncates queue to 5 items with a count suffix when queue has more than 5 items", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const queue = Array.from({ length: 10 }, (_, i) => ({ position: i, url: `https://example.com/${i}` }));
-    const state = { session: "idle", device: "o", queue };
+    const state = { session: "idle", queue };
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if (req.url.includes("/state")) return new Response(JSON.stringify(state));
@@ -273,6 +275,7 @@ describe("handleTelegram — state queue truncation", () => {
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     const sent = JSON.parse(body.text.replace(/<\/?pre>/g, ""));
+    expect(sent.device).toBe("o");
     expect(sent.queue).toHaveLength(6);
     expect(sent.queue[5]).toBe("… 5 more");
   });
@@ -280,7 +283,7 @@ describe("handleTelegram — state queue truncation", () => {
   it("does not truncate queue when 5 or fewer items", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}")));
     const queue = Array.from({ length: 5 }, (_, i) => ({ position: i, url: `https://example.com/${i}` }));
-    const state = { session: "idle", device: "o", queue };
+    const state = { session: "idle", queue };
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if (req.url.includes("/state")) return new Response(JSON.stringify(state));
@@ -292,6 +295,7 @@ describe("handleTelegram — state queue truncation", () => {
     const telegramCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(telegramCall[1].body);
     const sent = JSON.parse(body.text.replace(/<\/?pre>/g, ""));
+    expect(sent.device).toBe("o");
     expect(sent.queue).toHaveLength(5);
   });
 });
@@ -376,9 +380,9 @@ describe("handleSlack — channel command", () => {
 });
 
 describe("handleSlack — clear and reset commands", () => {
-  it("routes clear to DO and returns state synchronously", async () => {
+  it("routes clear to DO and returns state synchronously with device injected", async () => {
     const env = makeEnv();
-    const state = { session: "idle", device: "o" };
+    const state = { session: "idle" };
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
@@ -387,17 +391,19 @@ describe("handleSlack — clear and reset commands", () => {
     } as unknown as DurableObjectStub;
     const ctx = makeCtx();
     const request = await makeSlackRequest("clear", env);
-    const res = await handleSlack(request, env, ctx, stub);
+    const res = await handleSlack(request, env, ctx, stub, "o");
     expect(ctx.waitUntil).not.toHaveBeenCalled();
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls[0][0].url).toContain("/clear");
     const text = await res.text();
-    expect(text).toContain('"session"');
+    const json = JSON.parse(text.replace(/```\n?/g, ""));
+    expect(json.device).toBe("o");
+    expect(json.session).toBe("idle");
   });
 
-  it("routes reset to DO and returns state synchronously", async () => {
+  it("routes reset to DO and returns state synchronously with default device injected", async () => {
     const env = makeEnv();
-    const state = { session: "idle", device: "o" };
+    const state = { session: "idle" };
     const stub = {
       fetch: vi.fn(async (req: Request) => {
         if ((req as Request).url.includes("/state")) return new Response(JSON.stringify(state));
@@ -406,12 +412,14 @@ describe("handleSlack — clear and reset commands", () => {
     } as unknown as DurableObjectStub;
     const ctx = makeCtx();
     const request = await makeSlackRequest("reset", env);
-    const res = await handleSlack(request, env, ctx, stub);
+    const res = await handleSlack(request, env, ctx, stub, "k");
     expect(ctx.waitUntil).not.toHaveBeenCalled();
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls[0][0].url).toContain("/reset");
     const text = await res.text();
-    expect(text).toContain('"session"');
+    const json = JSON.parse(text.replace(/```\n?/g, ""));
+    expect(json.device).toBe("o"); // reset always returns DEFAULT_DEVICE
+    expect(json.session).toBe("idle");
   });
 });
 

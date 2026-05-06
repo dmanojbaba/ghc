@@ -265,7 +265,7 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
 
   if (command === "state") {
     const res  = await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/state")));
-    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+    const json = truncateStateQueue(await res.json() as Record<string, unknown>, sessionDeviceKey);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
@@ -280,7 +280,7 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
     await env.CALLER_KV.put("slack:all", inputKey);
     doStub = getDoStub(env, inputKey);
     const res  = await doStub.fetch(new Request(doUrl(inputKey, "/state")));
-    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+    const json = truncateStateQueue(await res.json() as Record<string, unknown>, inputKey);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
@@ -292,15 +292,16 @@ export async function handleSlack(request: Request, env: Env, ctx: ExecutionCont
     await env.CALLER_KV.put("slack:all", resolvedKey);
     doStub = getDoStub(env, resolvedKey);
     const res  = await doStub.fetch(new Request(doUrl(resolvedKey, "/state")));
-    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+    const json = truncateStateQueue(await res.json() as Record<string, unknown>, resolvedKey);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
   if (command === "clear" || command === "reset") {
     await dispatchCommand(command, device, rawValue, env, doStub, sessionDeviceKey);
+    const postResetKey = command === "reset" ? DEFAULT_DEVICE : sessionDeviceKey;
     if (command === "reset") await env.CALLER_KV.put("slack:all", DEFAULT_DEVICE);
-    const res  = await doStub.fetch(new Request(doUrl(sessionDeviceKey, "/state")));
-    const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+    const res  = await doStub.fetch(new Request(doUrl(postResetKey, "/state")));
+    const json = truncateStateQueue(await res.json() as Record<string, unknown>, postResetKey);
     return new Response("```\n" + JSON.stringify(json, null, 2) + "\n```", { status: 200 });
   }
 
@@ -314,11 +315,12 @@ function verifyTelegramSecret(request: Request, env: Env): boolean {
   return request.headers.get("X-Telegram-Bot-Api-Secret-Token") === secret;
 }
 
-function truncateStateQueue(json: Record<string, unknown>): Record<string, unknown> {
-  if (Array.isArray(json.queue) && json.queue.length > 5) {
-    return { ...json, queue: [...json.queue.slice(0, 5), `… ${json.queue.length - 5} more`] };
+function truncateStateQueue(json: Record<string, unknown>, deviceKey?: string): Record<string, unknown> {
+  const withDevice = deviceKey ? { device: deviceKey, ...json } : json;
+  if (Array.isArray(withDevice.queue) && withDevice.queue.length > 5) {
+    return { ...withDevice, queue: [...withDevice.queue.slice(0, 5), `… ${withDevice.queue.length - 5} more`] };
   }
-  return json;
+  return withDevice;
 }
 
 function truncateHistory(items: unknown[]): unknown[] {
@@ -369,7 +371,7 @@ export async function handleTelegram(request: Request, env: Env): Promise<Respon
     }
     if (command === "state") {
       const res   = await doStub.fetch(new Request(doUrl(deviceKey, "/state")));
-      const json  = truncateStateQueue(await res.json() as Record<string, unknown>);
+      const json  = truncateStateQueue(await res.json() as Record<string, unknown>, deviceKey);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
       return Response.json({});
     }
@@ -387,7 +389,7 @@ export async function handleTelegram(request: Request, env: Env): Promise<Respon
     doStub = getDoStub(env, inputKey);
     if (chatId && env.TELEGRAM_BOT_TOKEN) {
       const res  = await doStub.fetch(new Request(doUrl(inputKey, "/state")));
-      const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+      const json = truncateStateQueue(await res.json() as Record<string, unknown>, inputKey);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
     }
     return Response.json({});
@@ -443,7 +445,7 @@ export async function handleTelegram(request: Request, env: Env): Promise<Respon
     doStub = getDoStub(env, resolvedKey);
     if (chatId && env.TELEGRAM_BOT_TOKEN) {
       const res  = await doStub.fetch(new Request(doUrl(resolvedKey, "/state")));
-      const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+      const json = truncateStateQueue(await res.json() as Record<string, unknown>, resolvedKey);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
     }
     return Response.json({});
@@ -451,10 +453,11 @@ export async function handleTelegram(request: Request, env: Env): Promise<Respon
 
   try {
     await dispatchCommand(command, device, rawValue, env, doStub, deviceKey);
+    const postResetKey = command === "reset" ? DEFAULT_DEVICE : deviceKey;
     if (command === "reset") await env.CALLER_KV.put(sessionKey, DEFAULT_DEVICE);
     if (chatId && env.TELEGRAM_BOT_TOKEN && (command === "clear" || command === "reset")) {
-      const res  = await doStub.fetch(new Request(doUrl(deviceKey, "/state")));
-      const json = truncateStateQueue(await res.json() as Record<string, unknown>);
+      const res  = await doStub.fetch(new Request(doUrl(postResetKey, "/state")));
+      const json = truncateStateQueue(await res.json() as Record<string, unknown>, postResetKey);
       await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, JSON.stringify(json, null, 2), true);
     }
   } catch {
