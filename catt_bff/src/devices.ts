@@ -150,7 +150,6 @@ export const INPUT_TO_DEVICE: Record<string, string> = Object.fromEntries(
 export const DEFAULT_CHANNEL = "ping";
 export const DEFAULT_DEVICE = "o";
 export const DEFAULT_APP = "default";
-export const DEFAULT_PREV = "pingr2";
 export const DEFAULT_NEXT = "ping";
 export const DEFAULT_SESSION = "idle";
 export const DEFAULT_TTS = "Hello World!";
@@ -168,6 +167,10 @@ export function getAllDeviceKeys(deviceId: string): string[] {
 
 export function resolveDevice(input: string): string {
   return INPUT_TO_DEVICE[input] ?? input;
+}
+
+export function getDefaultPrev(inputKey: string): string {
+  return isAudioOnlyInput(DEVICE_ID, inputKey) ? "pingmp3" : "pingmp4";
 }
 
 export function isAudioOnlyInput(deviceId: string, inputKey: string): boolean {

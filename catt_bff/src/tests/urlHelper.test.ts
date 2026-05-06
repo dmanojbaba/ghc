@@ -77,8 +77,8 @@ describe("getParsedUrl", () => {
       expect(getParsedUrl("ping", REDIRECT_URL)).toBe(BASE_REDIRECT + "ping");
     });
 
-    it("prepends BASE_REDIRECT for pingr2", () => {
-      expect(getParsedUrl("pingr2", REDIRECT_URL)).toBe(BASE_REDIRECT + "pingr2");
+    it("prepends BASE_REDIRECT for pingmp4", () => {
+      expect(getParsedUrl("pingmp4", REDIRECT_URL)).toBe(BASE_REDIRECT + "pingmp4");
     });
 
     it("prepends BASE_REDIRECT for unknown shortcodes", () => {
@@ -125,24 +125,24 @@ describe("getPlaylistItems", () => {
     expect(result.rest).toEqual([]);
   });
 
-  it("returns DEFAULT_PREV fallback when items is empty", async () => {
+  it("returns pingmp4 fallback for video device when items is empty", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       json: () => Promise.resolve({ items: [] }),
     }));
 
-    const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL);
-    expect(result.first).toBe(BASE_REDIRECT + "pingr2");
+    const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL, 50, undefined, "tv");
+    expect(result.first).toBe(BASE_REDIRECT + "pingmp4");
     expect(result.firstTitle).toBeNull();
     expect(result.rest).toEqual([]);
   });
 
-  it("returns DEFAULT_PREV fallback when items is missing", async () => {
+  it("returns pingmp3 fallback for audio-only device when items is missing", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       json: () => Promise.resolve({}),
     }));
 
-    const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL);
-    expect(result.first).toBe(BASE_REDIRECT + "pingr2");
+    const result = await getPlaylistItems("apikey", "PLtest", REDIRECT_URL, 50, undefined, "o");
+    expect(result.first).toBe(BASE_REDIRECT + "pingmp3");
     expect(result.firstTitle).toBeNull();
     expect(result.rest).toEqual([]);
   });

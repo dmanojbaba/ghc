@@ -165,7 +165,7 @@ curl -X POST https://<worker>/catt -H 'Content-Type: application/json' -H 'X-API
 |---|---|
 | `/device/box/state` | Returns current state as pretty-printed JSON (session, device, channel, app, volume, prev, next, playlist, tts, alarm, queue) |
 | `/device/box/play` | Toggle play/pause |
-| `/device/box/prev` | Play previous (replays last TTS if `prev=tts`, plays pingr2 if no history) |
+| `/device/box/prev` | Play previous (replays last TTS if `prev=tts`, plays pingmp3/pingmp4 based on device if no history) |
 | `/device/box/next` | Advance queue; casts ping if queue empty |
 | `/device/box/stop` | Stop playback on catt_backend, clear queue, cancel alarm |
 | `/device/box/clear` | Clear queue + cancel alarm only, no catt_backend call; used before channel changes to ensure immediate playback |

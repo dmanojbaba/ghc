@@ -1,4 +1,4 @@
-import { DEFAULT_PREV } from "./devices";
+import { getDefaultPrev } from "./devices";
 
 const BASE_YOUTUBE = "https://www.youtube.com/watch?v=";
 
@@ -71,6 +71,7 @@ export async function getPlaylistItems(
   redirectUrl: string,
   maxResults = 50,
   startVideoId?: string,
+  deviceKey = "",
 ): Promise<{ first: string; firstTitle: string | null; rest: Array<{ url: string; title: string | null }> }> {
   const url =
     `https://www.googleapis.com/youtube/v3/playlistItems` +
@@ -81,7 +82,7 @@ export async function getPlaylistItems(
 
   if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
     if (startVideoId) return { first: BASE_YOUTUBE + startVideoId, firstTitle: null, rest: [] };
-    return { first: getParsedUrl(DEFAULT_PREV, redirectUrl), firstTitle: null, rest: [] };
+    return { first: getParsedUrl(getDefaultPrev(deviceKey), redirectUrl), firstTitle: null, rest: [] };
   }
 
   const items = data.items.map((item) => ({

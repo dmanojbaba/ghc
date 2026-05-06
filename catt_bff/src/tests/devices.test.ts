@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getDeviceList, getChannelList } from "../devices";
+import { getDeviceList, getChannelList, getDefaultPrev } from "../devices";
 
 describe("getDeviceList", () => {
   it("returns all devices for known deviceId", () => {
@@ -84,5 +84,19 @@ describe("getChannelList", () => {
 
   it("returns empty array for unknown deviceId", () => {
     expect(getChannelList("unknown")).toEqual([]);
+  });
+});
+
+describe("getDefaultPrev", () => {
+  it("returns pingmp3 for audio-only inputs", () => {
+    expect(getDefaultPrev("k")).toBe("pingmp3");
+    expect(getDefaultPrev("o")).toBe("pingmp3");
+    expect(getDefaultPrev("b")).toBe("pingmp3");
+    expect(getDefaultPrev("zbk")).toBe("pingmp3");
+  });
+
+  it("returns pingmp4 for video-capable inputs", () => {
+    expect(getDefaultPrev("tv")).toBe("pingmp4");
+    expect(getDefaultPrev("otv")).toBe("pingmp4");
   });
 });

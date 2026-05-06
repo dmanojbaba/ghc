@@ -4,7 +4,7 @@
 
 Single-file Cloudflare Worker (`src/index.js`) deployed at `redirect.example.com`. Serves as a URL shortener backed by Cloudflare KV, a YouTube search proxy, and a scheduled job that keeps shortcodes for daily news streams up to date.
 
-Used by `catt_bff` — shortcodes like `pttv`, `sun`, `ping`, `pingr2` are stored in KV here and resolved by appending `https://redirect.example.com/r/<key>` before sending to `catt_backend`.
+Used by `catt_bff` — shortcodes like `pttv`, `sun`, `ping`, `pingmp3`, `pingmp4` are stored in KV here and resolved by appending `https://redirect.example.com/r/<key>` before sending to `catt_backend`.
 
 ---
 

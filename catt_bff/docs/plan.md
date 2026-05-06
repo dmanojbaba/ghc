@@ -134,7 +134,7 @@ The `kv` table replaces Cloudflare KV from the prototype. The `history` table st
 | Key | Default | Description |
 |---|---|---|
 | `session` | `idle` | `active` (playing), `paused` (paused), or `idle` (stopped/default) |
-| `prev` | `pingr2` | Last played URL (for repeat) |
+| `prev` | `pingmp3` / `pingmp4` (device-dependent) | Last played URL (for repeat) |
 | `next` | `ping` | Not read from kv — `getState()` derives next from the queue table directly; kv value is a legacy default only |
 | `app` | `default` | `default` or `youtube` — controls `force_default` |
 | `tts` | `Hello World!` | Last TTS text |
@@ -183,7 +183,7 @@ IDLE ──(enqueue when idle)──► ACTIVE
 | `advance(userInitiated?)` | Pop next from queue; if empty + `userInitiated=true` → cast `DEFAULT_NEXT` (ping), set `session=idle`, cancel alarm; if empty + not user-initiated → set `session=idle`, cancel alarm, nothing cast; else cast item URL, set `session=active`, set alarm in 30s (settle) |
 | `clear()` | Stop catt_backend, cancel alarm, clear queue, reset `session`, `prev`, `next`, `tts`, `channel`, `sleep_at` to defaults (preserves `app`, `device`, `playlist`) |
 | `shuffle(playlistId)` | Clear queue, fetch playlist via YouTube API, cast first item (no prior stop — cast preempts current playback), load rest into queue, set alarm in 30s (settle) |
-| `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if `prev==DEFAULT_PREV` → cast pingr2, no alarm; else cast `prev` URL via `getParsedUrl`, set `session=active`, schedule alarm |
+| `playPrev()` | If `prev=="tts"` → replay last TTS text via `tts` command, no alarm; if no history → cast `getDefaultPrev(deviceKey)` (pingmp3 for audio-only, pingmp4 for video), no alarm; else cast `prev` URL via `getParsedUrl`, set `session=active`, schedule alarm |
 | `alarm()` | Call `getInfo` for player state + duration in one request; if IDLE/UNKNOWN → `advance()`; if PLAYING/BUFFERING → set `session=active`, smart schedule; if playing without duration (live stream) → cancel alarm; if PAUSED → set `session=paused`, poll every 60s; if `getInfo` fails → `getStatus` fallback |
 | `getState()` | Return current state dict (alarm, session, device, channel, app, prev, next, playlist, tts, sleep_at, queue array) — `alarm` and `sleep_at` are ISO timestamps or `null`. `queue` is `{ position, url }[]` covering all pending items including next-to-play. |
 
@@ -509,7 +509,7 @@ The `mediaShuffle` EXECUTE intent will read this value and populate the queue.
 | No Slack/Telegram | `/slack`, `/telegram` — unified endpoints supporting `cast`, `volume`, `play`, `stop`, `prev`, `next`, `tts` |
 | `/gcatt` — general-purpose GET/POST endpoint | `POST /catt` — clean POST-only endpoint with `cast`, `site`, `queue` commands and optional device override |
 | No audio-only device awareness | Switching input to a Mini device (name starts with "mini") auto-resets `app` to `default` |
-| `prev`/`next` sentinel keys sent raw to catt_backend | Bare redirect keys (`pingr2`, `ping`) resolved via `getParsedUrl` before sending to catt_backend |
+| `prev`/`next` sentinel keys sent raw to catt_backend | Bare redirect keys (`pingmp3`/`pingmp4`, `ping`) resolved via `getParsedUrl` before sending to catt_backend |
 | `OnOff` on calls `stop` on catt_backend | `OnOff` on uses `/clear` — resets queue state only, no catt_backend call |
 | `OnOff` off resets `app` to `default` | `OnOff` off leaves `app` unchanged |
 | No `volumeRelative` support | `volumeRelative` maps to `volumeup`/`volumedown` — no stored volume needed |

@@ -1,8 +1,8 @@
 import { castCommand, getStatus, getInfo } from "./catt";
 import { getPlaylistItems, getParsedUrl, extractYouTubePlaylistId } from "./urlHelper";
 import {
-  DEFAULT_APP, DEFAULT_PREV, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_PLAYLIST, DEFAULT_CHANNEL, DEFAULT_SLEEP_AT,
-  resolveDevice, getAdjacentChannel, getChannelKey, DEVICE_ID,
+  DEFAULT_APP, DEFAULT_NEXT, DEFAULT_SESSION, DEFAULT_TTS, DEFAULT_PLAYLIST, DEFAULT_CHANNEL, DEFAULT_SLEEP_AT,
+  resolveDevice, getAdjacentChannel, getChannelKey, getDefaultPrev, DEVICE_ID,
 } from "./devices";
 
 const POLL_INTERVAL_MS   = 10_000;
@@ -155,7 +155,7 @@ export class DeviceQueue implements DurableObject {
     let firstTitle: string | null;
     let rest: Array<{ url: string; title: string | null }>;
     try {
-      ({ first, firstTitle, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId, this.env.REDIRECT_URL, 50, startVideoId));
+      ({ first, firstTitle, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlistId, this.env.REDIRECT_URL, 50, startVideoId, deviceKey));
     } catch {
       this.set("session", DEFAULT_SESSION);
       await this.state.storage.deleteAlarm();
@@ -196,7 +196,7 @@ export class DeviceQueue implements DurableObject {
   async playPrev(deviceKey: string): Promise<void> {
     const row = this.sql.exec<{ url: string }>("SELECT url FROM history ORDER BY position DESC LIMIT 1").toArray()[0];
     const device = resolveDevice(deviceKey);
-    const url = row?.url ?? DEFAULT_PREV;
+    const url = row?.url ?? getDefaultPrev(deviceKey);
 
     if (url === "tts") {
       await castCommand(this.serverUrl, device, "tts", this.get("tts"), undefined, this.secret);
@@ -277,7 +277,7 @@ export class DeviceQueue implements DurableObject {
     await this.state.storage.setAlarm(Date.now() + POLL_INTERVAL_MS);
   }
 
-  async getState(): Promise<Record<string, unknown>> {
+  async getState(deviceKey: string): Promise<Record<string, unknown>> {
     const rows = this.sql
       .exec<{ position: number; url: string; title: string | null }>(
         "SELECT position, url, title FROM queue ORDER BY position ASC",
@@ -294,7 +294,7 @@ export class DeviceQueue implements DurableObject {
       alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
       sleep_at:  sleepAt ? new Date(Number(sleepAt)).toISOString() : null,
       channel:   this.get("channel"),
-      prev:      this.sql.exec<{ url: string }>("SELECT url FROM history ORDER BY position DESC LIMIT 1").toArray()[0]?.url ?? DEFAULT_PREV,
+      prev:      this.sql.exec<{ url: string }>("SELECT url FROM history ORDER BY position DESC LIMIT 1").toArray()[0]?.url ?? getDefaultPrev(deviceKey),
       next:      rows[0]?.url ?? DEFAULT_NEXT,
       playlist:  this.get("playlist") === DEFAULT_PLAYLIST ? "default" : this.get("playlist"),
       tts:       this.get("tts"),
@@ -313,7 +313,7 @@ export class DeviceQueue implements DurableObject {
 
     switch (action) {
       case "state":
-        return new Response(JSON.stringify(await this.getState(), null, 2), {
+        return new Response(JSON.stringify(await this.getState(deviceKey), null, 2), {
           headers: {
             "content-type": "application/json",
             "cache-control": "no-store",
@@ -369,7 +369,7 @@ export class DeviceQueue implements DurableObject {
         const val = body.value?.trim() ?? "";
         const playlist = extractYouTubePlaylistId(val);
         if (playlist && this.env.YOUTUBE_API_KEY) {
-          const { first, firstTitle, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlist.playlistId, this.env.REDIRECT_URL, 50, playlist.videoId ?? undefined);
+          const { first, firstTitle, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlist.playlistId, this.env.REDIRECT_URL, 50, playlist.videoId ?? undefined, deviceKey);
           await this.enqueue(deviceKey, first, firstTitle ?? undefined);
           const now = new Date().toISOString();
           for (const item of rest) {
