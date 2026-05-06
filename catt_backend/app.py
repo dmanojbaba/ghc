@@ -1,7 +1,12 @@
 import argparse
 import logging
 import os
+import random
+import socketserver
+import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from http.server import BaseHTTPRequestHandler
 from threading import Thread
 from uuid import UUID
 from datetime import datetime, date
@@ -12,7 +17,7 @@ from gtts import gTTS
 from catt.error import CattError, CattUserError
 from catt.http_server import serve_file
 from catt.subs_info import SubsInfo
-from catt.util import hunt_subtitles
+from catt.util import get_local_ip, hunt_subtitles
 
 # Workaround import — see pychromecast_workarounds.py for removal instructions.
 from pychromecast_workarounds import setup_cast, disconnect_after_request
@@ -52,16 +57,113 @@ def _serialisable(obj):
 
 
 def _create_server_thread(filename, address, port, content_type=None, single_req=False):
-    thr = Thread(target=serve_file, args=(filename, address, port, content_type, single_req))
+    thr = Thread(
+        target=serve_file, args=(filename, address, port, content_type, single_req)
+    )
     thr.daemon = True
     thr.start()
     return thr
+
+
+def _is_hls_url(value: str) -> bool:
+    """True when value is a remote URL pointing to an HLS manifest."""
+    lower = value.lower()
+    return lower.startswith(("http://", "https://")) and (
+        lower.endswith(".m3u8") or ".m3u8?" in lower
+    )
+
+
+def _serve_ffmpeg_pipe(m3u8_url: str, address: str, port: int) -> None:
+    """
+    Start ffmpeg, remux the HLS stream to fragmented MP4 on stdout,
+    and serve exactly one HTTP GET request from that pipe.
+    Runs in a daemon thread; terminates when the client disconnects.
+    """
+    proc = subprocess.Popen(
+        [
+            "ffmpeg",
+            "-i",
+            m3u8_url,
+            "-c",
+            "copy",
+            "-f",
+            "mp4",
+            "-movflags",
+            "frag_keyframe+empty_moov",
+            "-loglevel",
+            "error",
+            "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    class _PipeHandler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            try:
+                while True:
+                    chunk = proc.stdout.read(64 * 1024)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # Chromecast stopped; normal
+
+        def log_message(self, fmt, *args):  # suppress per-request log lines
+            pass
+
+    try:
+        with socketserver.TCPServer((address, port), _PipeHandler) as httpd:
+            httpd.handle_request()  # blocks until the one client disconnects
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+
+
+def _handle_hls_cast(body: dict):
+    value = body["value"]  # validated by caller
+    device = body.get("device")
+    title = body.get("title") or "HLS Stream"
+
+    # Connect to the cast device without running yt-dlp on the .m3u8 URL.
+    # setup_cast(device, video_url=None) returns just the controller (not a tuple).
+    cst = setup_cast(device, prep="app")
+
+    local_ip = get_local_ip(cst._cast.cast_info.host)
+    port = random.randrange(45000, 47000)
+    cast_url = "http://{}:{}/stream.mp4".format(local_ip, port)
+
+    thr = Thread(
+        target=_serve_ffmpeg_pipe,
+        args=(value, local_ip, port),
+        daemon=True,
+    )
+    thr.start()
+
+    # Give ffmpeg ~2 s to write the fMP4 header before the Chromecast connects.
+    time.sleep(2)
+
+    cst.play_media_url(
+        cast_url,
+        title=title,
+        content_type="video/mp4",
+        stream_type=body.get("stream_type"),
+    )
+    return _ok({"message": "Casting {} on {}".format(value, cst.cc_name)})
 
 
 def _handle_cast(body):
     value = body.get("value")
     if not value:
         raise _ValidationError("'value' is required for cast")
+
+    if _is_hls_url(value):
+        return _handle_hls_cast(body)
 
     device = body.get("device")
     title = body.get("title")
@@ -275,7 +377,9 @@ def handle_catt():
         return response
     except FuturesTimeoutError:
         logger.error("command=%s timed out after %ss", cmd, request_timeout)
-        return _err("Request timed out after {}s".format(request_timeout), "TimeoutError", 504)
+        return _err(
+            "Request timed out after {}s".format(request_timeout), "TimeoutError", 504
+        )
     except _ValidationError as e:
         logger.warning("command=%s validation_error=%s", cmd, e)
         return _err(str(e), "ValidationError", 400)
