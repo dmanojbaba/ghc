@@ -3,7 +3,7 @@ import { getParsedUrl } from "./urlHelper";
 import {
   DEVICES, DEVICE_ID, INPUT_TO_DEVICE,
   DEFAULT_APP, DEFAULT_DEVICE, DEFAULT_VOLUME,
-  getInputKey, getAppKey, getAdjacentInput, getChannelCode, getAdjacentChannel,
+  getInputKey, getAppKey, getAdjacentInput, getChannelCode,
 } from "./devices";
 
 function randomString(length = 6): string {
@@ -159,19 +159,12 @@ async function handleExecute(
           const channelCode = String(
             params.channelCode ?? getChannelCode(DEVICE_ID, String(params.channelNumber)) ?? "",
           );
-          await doGet(stub, deviceKey, "/clear");
-          await doGet(stub, deviceKey, "/set/channel/" + channelCode);
-          await doGet(stub, deviceKey, "/cast/" + encodeURIComponent(getParsedUrl(channelCode, env.REDIRECT_URL)));
+          await doGet(stub, deviceKey, "/channel/" + encodeURIComponent(channelCode));
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.relativeChannel") {
-          const doSt = await doState(stub, deviceKey);
-          const currentChannel = String(doSt.channel);
           const delta = Number(params.relativeChannelChange);
-          const channelCode = getAdjacentChannel(DEVICE_ID, currentChannel, delta);
-          await doGet(stub, deviceKey, "/clear");
-          await doGet(stub, deviceKey, "/set/channel/" + channelCode);
-          await doGet(stub, deviceKey, "/cast/" + encodeURIComponent(getParsedUrl(channelCode, env.REDIRECT_URL)));
+          await doGet(stub, deviceKey, "/channel/" + (delta >= 0 ? "up" : "down"));
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mediaShuffle") {
@@ -227,15 +220,15 @@ async function handleExecute(
         } else if (command === "action.devices.commands.mediaSeekRelative") {
           const seconds = Number(params.relativePositionMs ?? 0) / 1000;
           if (seconds > 0) {
-            await castCommand(env.CATT_BACKEND_URL, cattDevice, "ffwd", Math.abs(seconds), undefined, env.CATT_BACKEND_SECRET);
+            await doGet(stub, deviceKey, `/ffwd/${encodeURIComponent(Math.abs(seconds))}`);
           } else if (seconds < 0) {
-            await castCommand(env.CATT_BACKEND_URL, cattDevice, "rewind", Math.abs(seconds), undefined, env.CATT_BACKEND_SECRET);
+            await doGet(stub, deviceKey, `/rewind/${encodeURIComponent(Math.abs(seconds))}`);
           }
           result = { status: "SUCCESS", states: { online: true } };
 
         } else if (command === "action.devices.commands.mute") {
           const muted = Boolean(params.mute ?? true);
-          await castCommand(env.CATT_BACKEND_URL, cattDevice, "volumemute", muted, undefined, env.CATT_BACKEND_SECRET);
+          await doGet(stub, deviceKey, `/mute/${muted}`);
           result = { status: "SUCCESS", states: { online: true, isMuted: muted } };
 
         } else if (command === "action.devices.commands.volumeRelative") {

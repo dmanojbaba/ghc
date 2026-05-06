@@ -80,6 +80,74 @@ describe("handleFulfillment — mediaStop", () => {
   });
 });
 
+describe("handleFulfillment — channel commands", () => {
+  it("selectChannel routes to /channel/<key>", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.selectChannel", { channelCode: "ping" }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/channel/ping"))).toBe(true);
+  });
+
+  it("relativeChannel with positive delta routes to /channel/up", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.relativeChannel", { relativeChannelChange: 1 }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/channel/up"))).toBe(true);
+  });
+
+  it("relativeChannel with negative delta routes to /channel/down", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.relativeChannel", { relativeChannelChange: -1 }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/channel/down"))).toBe(true);
+  });
+});
+
+describe("handleFulfillment — mute", () => {
+  it("mute routes to /mute/true through DO", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mute", { mute: true }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/mute/true"))).toBe(true);
+  });
+
+  it("unmute routes to /mute/false through DO", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mute", { mute: false }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/mute/false"))).toBe(true);
+  });
+});
+
+describe("handleFulfillment — seek", () => {
+  it("mediaSeekRelative with positive ms routes to /ffwd/<seconds>", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mediaSeekRelative", { relativePositionMs: 30000 }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/ffwd/"))).toBe(true);
+  });
+
+  it("mediaSeekRelative with negative ms routes to /rewind/<seconds>", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mediaSeekRelative", { relativePositionMs: -30000 }), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/rewind/"))).toBe(true);
+  });
+});
+
+describe("handleFulfillment — prev and next", () => {
+  it("mediaPrevious routes to /prev", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mediaPrevious"), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/prev"))).toBe(true);
+  });
+
+  it("returnChannel routes to /prev", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.returnChannel"), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/prev"))).toBe(true);
+  });
+
+  it("mediaNext routes to /next", async () => {
+    const stub = makeDoStub();
+    await handleFulfillment(makeExecuteRequest("action.devices.commands.mediaNext"), makeEnv(), stub);
+    expect(getUrls(stub).some(u => u.includes("/next"))).toBe(true);
+  });
+});
+
 describe("handleFulfillment — KV session", () => {
   it("SetInput writes new device key to CALLER_KV", async () => {
     const kvPut = vi.fn();

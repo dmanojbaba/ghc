@@ -49,9 +49,7 @@ export class DeviceQueue implements DurableObject {
     const defaults: Record<string, string> = {
       app:      DEFAULT_APP,
       channel:  DEFAULT_CHANNEL,
-      next:     DEFAULT_NEXT,
       playlist: DEFAULT_PLAYLIST,
-      prev:     DEFAULT_PREV,
       session:  DEFAULT_SESSION,
       sleep_at: DEFAULT_SLEEP_AT,
       tts:      DEFAULT_TTS,
@@ -122,7 +120,6 @@ export class DeviceQueue implements DurableObject {
       title:         row.title ?? undefined,
       force_default: this.forceDefault(),
     }, this.secret);
-    this.set("prev", row.url);
     this.recordHistory(row.url, row.title);
     this.set("session", "active");
     await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
@@ -132,8 +129,6 @@ export class DeviceQueue implements DurableObject {
     this.sql.exec("DELETE FROM queue");
     await this.state.storage.deleteAlarm();
     this.set("channel", DEFAULT_CHANNEL);
-    this.set("next",    DEFAULT_NEXT);
-    this.set("prev",    DEFAULT_PREV);
     this.set("session", DEFAULT_SESSION);
     this.set("playlist", DEFAULT_PLAYLIST);
     this.set("sleep_at", DEFAULT_SLEEP_AT);
@@ -171,7 +166,6 @@ export class DeviceQueue implements DurableObject {
     for (const item of rest) {
       this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", item.url, item.title, now);
     }
-    this.set("prev", first);
     this.recordHistory(first, firstTitle);
     await castCommand(this.serverUrl, device, "cast", first, {
       force_default: this.forceDefault(),
@@ -190,33 +184,30 @@ export class DeviceQueue implements DurableObject {
       await castCommand(this.serverUrl, device, "cast_site", arg, undefined, this.secret);
     } else {
       this.set("tts", arg);
+      this.recordHistory("tts", arg);
       if (device.toLowerCase().includes("tv")) {
         await castCommand(this.serverUrl, device, "cast_site", `https://${host}/echo?text=${encodeURIComponent(arg)}`, undefined, this.secret);
       } else {
-        this.set("prev", "tts");
         await castCommand(this.serverUrl, device, "tts", arg, undefined, this.secret);
       }
     }
   }
 
   async playPrev(deviceKey: string): Promise<void> {
-    const rawPrev = this.get("prev");
-    const device  = resolveDevice(deviceKey);
+    const row = this.sql.exec<{ url: string }>("SELECT url FROM history ORDER BY position DESC LIMIT 1").toArray()[0];
+    const device = resolveDevice(deviceKey);
+    const url = row?.url ?? DEFAULT_PREV;
 
-    if (rawPrev === "tts") {
+    if (url === "tts") {
       await castCommand(this.serverUrl, device, "tts", this.get("tts"), undefined, this.secret);
-    } else {
-      await castCommand(this.serverUrl, device, "cast", getParsedUrl(rawPrev, this.env.REDIRECT_URL), {
-        force_default: this.forceDefault(),
-      }, this.secret);
-    }
-
-    if (rawPrev !== DEFAULT_PREV && rawPrev !== "tts") {
-      this.set("session", "active");
-      await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
-    } else {
       this.set("session", DEFAULT_SESSION);
       await this.state.storage.deleteAlarm();
+    } else {
+      await castCommand(this.serverUrl, device, "cast", getParsedUrl(url, this.env.REDIRECT_URL), {
+        force_default: this.forceDefault(),
+      }, this.secret);
+      this.set("session", "active");
+      await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
     }
   }
 
@@ -303,7 +294,7 @@ export class DeviceQueue implements DurableObject {
       alarm:     alarmTs ? new Date(alarmTs).toISOString() : null,
       sleep_at:  sleepAt ? new Date(Number(sleepAt)).toISOString() : null,
       channel:   this.get("channel"),
-      prev:      this.get("prev"),
+      prev:      this.sql.exec<{ url: string }>("SELECT url FROM history ORDER BY position DESC LIMIT 1").toArray()[0]?.url ?? DEFAULT_PREV,
       next:      rows[0]?.url ?? DEFAULT_NEXT,
       playlist:  this.get("playlist") === DEFAULT_PLAYLIST ? "default" : this.get("playlist"),
       tts:       this.get("tts"),
@@ -415,7 +406,6 @@ export class DeviceQueue implements DurableObject {
               await castCommand(this.serverUrl, device, "cast", parsedUrl, {
                 force_default: this.forceDefault(),
               }, this.secret);
-              this.set("prev", parsedUrl);
               this.recordHistory(parsedUrl);
               this.set("session", "active");
               await this.state.storage.setAlarm(Date.now() + CAST_SETTLE_MS);
