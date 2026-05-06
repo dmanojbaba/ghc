@@ -52,7 +52,10 @@ export async function castCommand(
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
-  if (!res.ok) throw new Error(`catt_backend error: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`catt_backend error: ${res.status} ${body.slice(0, 200)}`);
+  }
   return res.json() as Promise<CattResponse>;
 }
 
@@ -64,7 +67,10 @@ export async function getStatus(serverUrl: string, device: string, secret?: stri
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
-  if (!res.ok) throw new Error(`catt_backend error: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`catt_backend error: ${res.status} ${body.slice(0, 200)}`);
+  }
   return res.json() as Promise<CattStatusResponse>;
 }
 
@@ -76,6 +82,9 @@ export async function getInfo(serverUrl: string, device: string, secret?: string
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
-  if (!res.ok) throw new Error(`catt_backend error: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`catt_backend error: ${res.status} ${body.slice(0, 200)}`);
+  }
   return res.json() as Promise<CattInfoResponse>;
 }
