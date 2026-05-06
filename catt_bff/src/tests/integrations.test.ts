@@ -170,6 +170,13 @@ async function getDoBody(stub: DurableObjectStub): Promise<Record<string, unknow
   return JSON.parse(await (call![0] as Request).text());
 }
 
+async function getEnqueueBody(stub: DurableObjectStub): Promise<Record<string, unknown>> {
+  const call = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+    (c: unknown[]) => (c[0] as Request).url.includes("/enqueue"),
+  );
+  return JSON.parse(await (call![0] as Request).text());
+}
+
 describe("handleSlack — device token parsing", () => {
   it("treats known alias as device", async () => {
     const env = makeEnv();
@@ -574,6 +581,35 @@ describe("handleSlack — cast with channel key routes to channel", () => {
   });
 });
 
+describe("handleSlack — queue command", () => {
+  it("queue without device routes to session DO /enqueue", async () => {
+    const env = makeEnv();
+    const stub = makeDoStub();
+    const request = await makeSlackRequest("queue https://example.com/video", env);
+    await handleSlack(request, env, makeCtx(), stub);
+    const body = await getEnqueueBody(stub);
+    expect(body).toMatchObject({ value: "https://example.com/video" });
+  });
+
+  it("queue with device token routes to that device DO without switching session", async () => {
+    const kvPut = vi.fn();
+    const env = makeEnv({ CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace });
+    const sessionStub = makeDoStub();
+    const targetStub = { fetch: vi.fn(async () => new Response("ok")) } as unknown as DurableObjectStub;
+    env.DEVICE_QUEUE = {
+      idFromName: (name: string) => ({ name } as unknown as DurableObjectId),
+      get: (id: DurableObjectId) => ((id as unknown as { name: string }).name === "k" ? targetStub : sessionStub),
+    } as unknown as DurableObjectNamespace;
+    const request = await makeSlackRequest("queue k https://example.com/video", env);
+    await handleSlack(request, env, makeCtx(), sessionStub);
+    const calls = (targetStub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const body = JSON.parse(await calls[0][0].text()) as Record<string, unknown>;
+    expect(body).toMatchObject({ value: "https://example.com/video" });
+    expect(kvPut).not.toHaveBeenCalled();
+  });
+});
+
 describe("handleSlack — tts aliases", () => {
   it("broadcast routes to DO /site/ with encoded text", async () => {
     const env = makeEnv();
@@ -634,6 +670,35 @@ describe("handleTelegram — playlist command", () => {
     const calls = (stub.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => (c[0] as Request).url);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain("/shuffle");
+  });
+});
+
+describe("handleTelegram — queue command", () => {
+  it("queue without device routes to session DO /enqueue", async () => {
+    const stub = makeDoStub();
+    const env = makeEnvWithStub(stub);
+    await handleTelegram(makeTelegramRequest("queue https://example.com/video", 111), env);
+    const body = await getEnqueueBody(stub);
+    expect(body).toMatchObject({ value: "https://example.com/video" });
+  });
+
+  it("queue with device token routes to that device DO without switching session", async () => {
+    const kvPut = vi.fn();
+    const sessionStub = makeDoStub();
+    const targetStub = { fetch: vi.fn(async () => new Response("ok")) } as unknown as DurableObjectStub;
+    const env = makeEnv({
+      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+      DEVICE_QUEUE: {
+        idFromName: (name: string) => ({ name } as unknown as DurableObjectId),
+        get: (id: DurableObjectId) => ((id as unknown as { name: string }).name === "k" ? targetStub : sessionStub),
+      } as unknown as DurableObjectNamespace,
+    });
+    await handleTelegram(makeTelegramRequest("queue k https://example.com/video", 111), env);
+    const calls = (targetStub.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const body = JSON.parse(await calls[0][0].text()) as Record<string, unknown>;
+    expect(body).toMatchObject({ value: "https://example.com/video" });
+    expect(kvPut).not.toHaveBeenCalled();
   });
 });
 

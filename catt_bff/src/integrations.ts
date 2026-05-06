@@ -10,6 +10,7 @@ const DO_COMMANDS = new Set(["play", "stop", "prev", "next", "unmute", "clear", 
 
 const HELP_TEXT = `Commands: <command> [device] [value]
 cast [device] [url]   – cast URL (omit for next)
+queue [device] [url]  – add URL to queue (starts if idle, appends if busy)
 tts/broadcast/speak/talk [text] – speak text
 volume [device] <n>   – set volume 0–100
 volume up/down        – step volume
@@ -104,6 +105,17 @@ async function dispatchCommand(
     await doStub.fetch(new Request(doUrl(sessionDeviceKey, `/mute/${muted}`)));
     return "mute";
   }
+  if (command === "queue") {
+    const targetKey = device && device in INPUT_TO_DEVICE ? (getInputKey(DEVICE_ID, device, null) ?? sessionDeviceKey) : sessionDeviceKey;
+    const targetStub = targetKey !== sessionDeviceKey ? getDoStub(env, targetKey) : doStub;
+    await targetStub.fetch(new Request(doUrl(targetKey, "/enqueue"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: rawValue.trim() }),
+    }));
+    return "queue";
+  }
+
   const val = rawValue.trim();
   const channelKey = val && !val.startsWith("http") ? getChannelKey(DEVICE_ID, val) : null;
   if (channelKey) {
@@ -118,7 +130,7 @@ async function dispatchCommand(
 }
 
 const KNOWN_COMMANDS = new Set([
-  "cast", "tts", "broadcast", "speak", "talk", "volume", "mute", "unmute", "play", "stop",
+  "cast", "queue", "tts", "broadcast", "speak", "talk", "volume", "mute", "unmute", "play", "stop",
   "clear", "reset", "prev", "next", "rewind", "ffwd", "sleep", "channel", "device", "playlist", "state", "history", "help", "start",
 ]);
 
@@ -140,7 +152,7 @@ Return ONLY valid JSON — either a single command object or an array of command
 Each object has this shape: {"command":"...","device":"...","value":"..."}
 device and value are optional strings.
 
-Valid commands: cast, tts, broadcast, speak, talk, volume, mute, unmute, play, stop, clear, reset, prev, next, rewind, ffwd, sleep, channel, device, playlist, state, help
+Valid commands: cast, queue, tts, broadcast, speak, talk, volume, mute, unmute, play, stop, clear, reset, prev, next, rewind, ffwd, sleep, channel, device, playlist, state, help
 
 Valid device keys (use the key, not the name): ${devices}
 
@@ -170,6 +182,10 @@ Examples:
   "hello play radio chennai"   -> {"command":"channel","value":"chennai"}
   "replay my playlist"         -> {"command":"playlist"}
   "please play my playlist"    -> {"command":"playlist"}
+  "add kids rhymes to queue"   -> {"command":"queue","value":"kids rhymes"}
+  "add jazz music to office queue" -> {"command":"queue","device":"o","value":"jazz music"}
+  "add radio lime to mini office queue" -> {"command":"queue","device":"o","value":"lime"}
+  "add believer to kitchen queue" -> {"command":"queue","device":"k","value":"believer"}
   "play radio lime for 30 minutes"       -> [{"command":"channel","value":"lime"},{"command":"sleep","value":"30"}]
   "please play channel 6 for 1 hour"    -> [{"command":"channel","value":"chennai"},{"command":"sleep","value":"60"}]
 

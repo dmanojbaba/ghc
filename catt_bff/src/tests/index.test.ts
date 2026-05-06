@@ -167,21 +167,52 @@ describe("/catt — KV session routing", () => {
     expect(body.device).toBe("k");
   });
 
-  it("cast with body.device updates KV session", async () => {
+  it("cast with body.device does not update KV session (one-shot)", async () => {
     const kvPut = vi.fn();
     const env = makeEnv({
       CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
     });
     await worker.fetch(makeCattRequest({ command: "cast", device: "k", value: "https://example.com" }, { "X-Caller": "kids" }), env, makeCtx());
-    expect(kvPut).toHaveBeenCalledWith("ui:kids", "k");
+    expect(kvPut).not.toHaveBeenCalled();
   });
 
-  it("cast with device=queue does not update KV session", async () => {
+  it("queue command routes to target device DO /enqueue without updating KV", async () => {
     const kvPut = vi.fn();
+    let capturedDoName = "";
+    let capturedUrl = "";
+    let capturedBody: Record<string, unknown> = {};
     const env = makeEnv({
-      CALLER_KV: { get: vi.fn(async () => null), put: kvPut } as unknown as KVNamespace,
+      CALLER_KV: { get: vi.fn(async () => "o"), put: kvPut } as unknown as KVNamespace,
+      DEVICE_QUEUE: {
+        idFromName: (name: string) => { capturedDoName = name; return {} as DurableObjectId; },
+        get: () => ({
+          fetch: vi.fn(async (req: Request) => {
+            capturedUrl = req.url;
+            capturedBody = await req.json() as Record<string, unknown>;
+            return new Response("ok");
+          }),
+        } as unknown as DurableObjectStub),
+      } as unknown as DurableObjectNamespace,
     });
-    await worker.fetch(makeCattRequest({ command: "cast", device: "queue", value: "https://example.com" }, { "X-Caller": "kids" }), env, makeCtx());
+    await worker.fetch(makeCattRequest({ command: "queue", device: "k", value: "https://example.com" }, { "X-Caller": "admin" }), env, makeCtx());
+    expect(capturedDoName).toBe("k");
+    expect(capturedUrl).toContain("/enqueue");
+    expect(capturedBody).toMatchObject({ value: "https://example.com" });
+    expect(kvPut).not.toHaveBeenCalled();
+  });
+
+  it("queue command without device routes to session device", async () => {
+    const kvPut = vi.fn();
+    let capturedDoName = "";
+    const env = makeEnv({
+      CALLER_KV: { get: vi.fn(async (key: string) => key === "ui:kids" ? "b" : null), put: kvPut } as unknown as KVNamespace,
+      DEVICE_QUEUE: {
+        idFromName: (name: string) => { capturedDoName = name; return {} as DurableObjectId; },
+        get: () => ({ fetch: vi.fn(async () => new Response("ok")) } as unknown as DurableObjectStub),
+      } as unknown as DurableObjectNamespace,
+    });
+    await worker.fetch(makeCattRequest({ command: "queue", value: "https://example.com" }, { "X-Caller": "kids" }), env, makeCtx());
+    expect(capturedDoName).toBe("b");
     expect(kvPut).not.toHaveBeenCalled();
   });
 

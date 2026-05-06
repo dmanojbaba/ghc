@@ -99,10 +99,20 @@ export default {
         return Response.json({ device: deviceKey, ...state }, { headers: { "cache-control": "no-store" } });
       }
 
-      const isQueueDevice = body.device === "queue";
-      const resolvedKey = isQueueDevice ? null : getInputKey(DEVICE_ID, body.device ?? "", null);
+      if (body.command === "queue") {
+        const targetKey = body.device
+          ? (getInputKey(DEVICE_ID, body.device, null) ?? deviceKey)
+          : deviceKey;
+        const stub = getDoStub(env, targetKey);
+        return stub.fetch(new Request(`https://do/device/${targetKey}/enqueue`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ value: body.value }),
+        }));
+      }
+
+      const resolvedKey = getInputKey(DEVICE_ID, body.device ?? "", null);
       if (resolvedKey && body.command === "cast" && body.device) {
-        await env.CALLER_KV.put(sessionKey, resolvedKey);
         deviceKey = resolvedKey;
       }
 

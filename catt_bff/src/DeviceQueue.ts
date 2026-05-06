@@ -364,6 +364,23 @@ export class DeviceQueue implements DurableObject {
         return new Response("ok");
       }
 
+      case "enqueue": {
+        const body = await request.json() as { value: string };
+        const val = body.value?.trim() ?? "";
+        const playlist = extractYouTubePlaylistId(val);
+        if (playlist && this.env.YOUTUBE_API_KEY) {
+          const { first, firstTitle, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlist.playlistId, this.env.REDIRECT_URL, 50, playlist.videoId ?? undefined);
+          await this.enqueue(deviceKey, first, firstTitle ?? undefined);
+          const now = new Date().toISOString();
+          for (const item of rest) {
+            this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", item.url, item.title, now);
+          }
+        } else {
+          await this.enqueue(deviceKey, getParsedUrl(val, this.env.REDIRECT_URL));
+        }
+        return new Response("ok");
+      }
+
       case "site": {
         const rawArg = decodeURIComponent(parts.slice(3).join("/"));
         await this.playSite(deviceKey, rawArg, new URL(request.url).host);
@@ -371,10 +388,9 @@ export class DeviceQueue implements DurableObject {
       }
 
       case "catt": {
-        const body = await request.json() as { command: string; value?: string; device?: string };
-        const cmd       = body.command;
-        const val       = body.value?.trim() ?? "";
-        const deviceArg = body.device ?? "";
+        const body = await request.json() as { command: string; value?: string };
+        const cmd = body.command?.trim() ?? "";
+        const val = body.value?.trim() ?? "";
 
         const device = resolveDevice(deviceKey);
 
@@ -382,18 +398,6 @@ export class DeviceQueue implements DurableObject {
           const hasValue = !!body.value?.trim();
           if (!hasValue) {
             await this.advance(deviceKey, true);
-          } else if (deviceArg === "queue") {
-            const playlist = extractYouTubePlaylistId(val);
-            if (playlist && this.env.YOUTUBE_API_KEY) {
-              const { first, firstTitle, rest } = await getPlaylistItems(this.env.YOUTUBE_API_KEY, playlist.playlistId, this.env.REDIRECT_URL, 50, playlist.videoId ?? undefined);
-              await this.enqueue(deviceKey, first, firstTitle ?? undefined);
-              const now = new Date().toISOString();
-              for (const item of rest) {
-                this.sql.exec("INSERT INTO queue (url, title, added_at) VALUES (?, ?, ?)", item.url, item.title, now);
-              }
-            } else {
-              await this.enqueue(deviceKey, getParsedUrl(val, this.env.REDIRECT_URL));
-            }
           } else {
             const playlist = extractYouTubePlaylistId(val);
             if (playlist && this.env.YOUTUBE_API_KEY) {
