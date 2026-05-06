@@ -1,4 +1,4 @@
-CATT_API_KEY=your-api-key
+CATT_API_KEY=your-catt-api-key
 CATT_BACKEND_SECRET=your-backend-secret
 CATT_BACKEND_URL=https://backend.example.com
 REDIRECT_URL=https://redirect.example.com

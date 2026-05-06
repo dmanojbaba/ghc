@@ -11,3 +11,6 @@ _internal/
 
 # Cloudflare local dev secrets
 .dev.vars
+
+# Backend local dev secrets
+.env
