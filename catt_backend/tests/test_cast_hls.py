@@ -1,11 +1,19 @@
 import pytest
+from unittest.mock import MagicMock
+
+
+def _make_ready_event():
+    """Return a mock Event that reports ready immediately."""
+    ev = MagicMock()
+    ev.wait.return_value = True
+    return ev
 
 
 def _setup_hls(monkeypatch, mock_cast):
     monkeypatch.setattr("app.setup_cast", lambda *a, **kw: mock_cast)
     monkeypatch.setattr("app.get_local_ip", lambda host: "192.168.1.10")
     monkeypatch.setattr("app._serve_ffmpeg_pipe", lambda *a: None)
-    monkeypatch.setattr("app.time.sleep", lambda s: None)
+    monkeypatch.setattr("app.Event", _make_ready_event)
 
 
 def test_hls_url_routed_to_hls_handler(client, mock_cast, monkeypatch):
@@ -36,7 +44,7 @@ def test_hls_pipe_server_started_with_original_url(client, mock_cast, monkeypatc
     monkeypatch.setattr("app.setup_cast", lambda *a, **kw: mock_cast)
     monkeypatch.setattr("app.get_local_ip", lambda host: "192.168.1.10")
     monkeypatch.setattr("app._serve_ffmpeg_pipe", lambda *a: pipe_calls.append(a))
-    monkeypatch.setattr("app.time.sleep", lambda s: None)
+    monkeypatch.setattr("app.Event", _make_ready_event)
     client.post(
         "/catt", json={"command": "cast", "value": "https://example.com/live.m3u8"}
     )
@@ -88,7 +96,7 @@ def test_hls_query_string_url_passed_to_ffmpeg(client, mock_cast, monkeypatch):
     monkeypatch.setattr("app.setup_cast", lambda *a, **kw: mock_cast)
     monkeypatch.setattr("app.get_local_ip", lambda host: "192.168.1.10")
     monkeypatch.setattr("app._serve_ffmpeg_pipe", lambda *a: pipe_calls.append(a))
-    monkeypatch.setattr("app.time.sleep", lambda s: None)
+    monkeypatch.setattr("app.Event", _make_ready_event)
     url = "https://cdn.example.com/stream.m3u8?token=abc&ts=123"
     client.post("/catt", json={"command": "cast", "value": url})
     assert pipe_calls[0][0] == url
