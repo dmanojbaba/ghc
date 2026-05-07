@@ -90,6 +90,8 @@ def _serve_ffmpeg_pipe(
             m3u8_url,
             "-c",
             "copy",
+            "-bsf:a",
+            "aac_adtstoasc",
             "-f",
             "mp4",
             "-movflags",
