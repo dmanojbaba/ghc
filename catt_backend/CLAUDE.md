@@ -43,6 +43,14 @@ POST /catt  {command, device?, value?, ...}
      ├── command lookup in ACTION_HANDLERS
      └── executor.submit(handler)  ← ThreadPoolExecutor, 45s timeout
               │
+              ├── _handle_cast() — if value is a remote .m3u8 URL:
+              │        ├── setup_cast(device, video_url=None)  ← connect only, no yt-dlp
+              │        ├── ffmpeg -i <url> -c copy -bsf:a aac_adtstoasc -f mp4
+              │        │          -movflags frag_keyframe+empty_moov+default_base_moof pipe:1
+              │        ├── _serve_ffmpeg_pipe()  ← daemon thread, single-request HTTP server
+              │        │     blocks reading first chunk, sets ready_event (max 30s wait)
+              │        └── cst.play_media_url(http://local_ip:port/stream.mp4)
+              │
               ├── setup_cast()  ← pychromecast_workarounds (wraps catt, mDNS discovery)
               │        │
               │        └── Chromecast device
@@ -54,16 +62,16 @@ POST /catt  {command, device?, value?, ...}
 
 15 handlers in `ACTION_HANDLERS`:
 
-| Command | Description |
-|---|---|
-| `cast` | Cast URL or local file (auto-detects subtitles, spawns HTTP server for local files) |
-| `cast_site` | Cast website via DashCast controller |
-| `tts` | Generate MP3 via gTTS, then cast it |
-| `play` / `pause` / `play_toggle` / `stop` | Playback controls |
-| `rewind` / `ffwd` | Seek ±N seconds (default 30) |
-| `volume` / `volumeup` / `volumedown` / `volumemute` | Volume controls |
-| `status` | Returns `cast_info` (volume, player state, title) |
-| `info` | Returns full playback info (duration, current_time, content_id) |
+| Command                                             | Description                                                                                                                                                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cast`                                              | Cast URL or local file. Remote `.m3u8` URLs are intercepted by `_is_hls_url()` before yt-dlp and remuxed to fragmented MP4 via ffmpeg (`_handle_hls_cast`). All other URLs go through yt-dlp + StreamInfo as normal. |
+| `cast_site`                                         | Cast website via DashCast controller                                                                                                                                                                                 |
+| `tts`                                               | Generate MP3 via gTTS, then cast it                                                                                                                                                                                  |
+| `play` / `pause` / `play_toggle` / `stop`           | Playback controls                                                                                                                                                                                                    |
+| `rewind` / `ffwd`                                   | Seek ±N seconds (default 30)                                                                                                                                                                                         |
+| `volume` / `volumeup` / `volumedown` / `volumemute` | Volume controls                                                                                                                                                                                                      |
+| `status`                                            | Returns `cast_info` (volume, player state, title)                                                                                                                                                                    |
+| `info`                                              | Returns full playback info (duration, current_time, content_id)                                                                                                                                                      |
 
 ### Response format
 
@@ -99,6 +107,8 @@ When `value` is a local file path, `app.py` spawns a background `Thread` running
 ## Testing conventions
 
 Tests use `pytest` with `monkeypatch.setattr("app.setup_cast", ...)` to mock the catt library — no real Chromecast needed. Fixtures `mock_cast` and `mock_stream` are defined in `conftest.py`. Tests cover validation, auth, all 15 commands, error handling, seek, volume, and response shape.
+
+`test_cast_hls.py` covers the HLS path. It monkeypatches `app.setup_cast` (returns just the controller, not a tuple), `app.get_local_ip`, `app._serve_ffmpeg_pipe`, and `app.Event` (returns a mock whose `.wait()` returns `True` immediately). Tests cover URL detection, pipe server invocation, query-string URLs, title forwarding, and non-HLS passthrough.
 
 `test_pychromecast_workarounds.py` tests the workaround module in isolation by monkeypatching `_setup_cast` directly on the module. It covers both return shapes of `setup_cast` (plain controller and `(controller, stream)` tuple), and all `disconnect_after_request` paths (cast present, cast absent, thread-local unset).
 

@@ -9,7 +9,7 @@
 
 ## Component Boundaries
 
-- `catt_backend/app.py` is a single-endpoint Flask API: `POST /catt`. Command handlers live in `ACTION_HANDLERS`; responses must keep the `{"status":"success","data":...}` or `{"status":"error",...}` shape.
+- `catt_backend/app.py` is a single-endpoint Flask API: `POST /catt`. Command handlers live in `ACTION_HANDLERS`; responses must keep the `{"status":"success","data":...}` or `{"status":"error",...}` shape. Remote `.m3u8` URLs in `cast` are intercepted by `_is_hls_url()` before yt-dlp and remuxed to fragmented MP4 via ffmpeg (`_handle_hls_cast` + `_serve_ffmpeg_pipe`). Do not bypass this path for HLS URLs.
 - `catt_backend/pychromecast_workarounds.py` is intentional. The backend must disconnect Chromecast sessions after each request to avoid pychromecast reconnect-thread issues.
 - `catt_bff/src/index.ts` owns auth, routing, scheduled resets, and caller-session KV updates. Preserve its distinction between session-changing commands and one-shot device overrides.
 - `catt_bff/src/cattHandler.ts` and `catt_bff/src/integrations.ts` both treat `cast <device> ...` and `volume <device> ...` as one-shot commands. Only `device <key>` updates the caller session.
